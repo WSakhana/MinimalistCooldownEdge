@@ -2,8 +2,11 @@
 ## Title: |cff00ff00MinimalistCooldownEdge|r
 ## Notes: A clean and lightweight style for cooldown swipes, edge textures, and timers.
 ## Author: Anahkas
-## Version: 1.1
+## Version: 1.2
 ## IconTexture: Interface\Cooldown\edge
 ## Category: Action Bars
+## SavedVariables: MinimalistCooldownEdgeDB
 
+Config.lua
 Core.lua
+GUI.lua
