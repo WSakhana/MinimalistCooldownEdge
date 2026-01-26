@@ -1,20 +1,25 @@
--- Core.lua - Main functionality (Auras merged into Global)
+-- Core.lua - Main functionality and Detection Logic
 
 local addonName, addon = ...
 addon = addon or {}
 _G[addonName] = addon
 
--- === LOGIQUE DE DÉTECTION ===
+-- === DETECTION LOGIC ===
 local function GetCooldownCategory(cooldownFrame)
     local current = cooldownFrame:GetParent()
     local depth = 0
-    local maxDepth = 20 
     
-    -- OPTIMISATION CPU : Pré-check pour les boutons de Buffs Blizzard standards
-    -- On retourne immédiatement "global" pour éviter de scanner la hiérarchie pour rien
+    -- Retrieve max depth from Global config (default to 10 if not ready)
+    local maxDepth = 10
+    if addon.Config then
+        maxDepth = addon.Config:Get("scanDepth", "global") or 10
+    end
+    
+    -- CPU OPTIMIZATION: Fast Check for Standard Buttons
+    -- Return "global" immediately for standard Blizzard buffs to avoid scanning
     local parentName = current and current:GetName() or ""
     if string.find(parentName, "BuffButton") or string.find(parentName, "DebuffButton") or string.find(parentName, "TempEnchant") then
-        return "global" -- Les Auras sont maintenant dans Global/Others
+        return "global" 
     end
     
     while current and current ~= UIParent and depth < maxDepth do
@@ -50,24 +55,21 @@ local function GetCooldownCategory(cooldownFrame)
            or string.find(name, "MultiBar") 
            or string.find(name, "BT4") 
            or string.find(name, "Dominos") then
-             -- Sécurité : On s'assure que ce n'est pas une aura sur un bouton sécurisé
+             -- Safety: Ensure it's not an Aura on a secure button
              if not string.find(name, "Aura") then
                 return "actionbar"
              end
         end
         
-        -- Note: Les cadres d'Auras (Raven, BuffFrame, etc.) ne sont plus détectés spécifiquement
-        -- Ils tomberont donc naturellement dans le "return global" à la fin de la boucle.
-
         current = current:GetParent()
         depth = depth + 1
     end
 
-    -- Tout le reste (y compris les Auras non détectées au début) va dans Global
+    -- Everything else falls into Global
     return "global"
 end
 
--- === APPLICATION DU STYLE ===
+-- === STYLE APPLICATION ===
 function addon:ApplyCustomStyle(self)
     if not self or self:IsForbidden() then return end
 

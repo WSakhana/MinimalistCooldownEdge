@@ -1,18 +1,17 @@
--- Config.lua - Gestion de configuration Multi-Catégories
+-- Config.lua - Multi-Category Configuration Management
 
 local addonName, addon = ...
 addon.Config = {}
 
--- Définition des catégories supportées
--- "auras" a été supprimé, elles utiliseront maintenant "global"
+-- Definition of supported categories
 addon.Categories = {
-    "actionbar", -- Barres d'action
-    "nameplate", -- Barres de vie ennemies
-    "unitframe", -- Cadres de joueur/cible/groupe
-    "global"     -- TOUT le reste (y compris Auras, Buffs, Debuffs, Sacs, etc.)
+    "actionbar", -- Action Bars (Spells)
+    "nameplate", -- Enemy Nameplates
+    "unitframe", -- Unit Frames (Player/Target/Group)
+    "global"     -- Everything else (Auras, Buffs, Bags, Items, etc.)
 }
 
--- Style par défaut
+-- Default Style
 local defaultStyle = {
     font = "Fonts\\FRIZQT__.TTF",
     fontSize = 18,
@@ -21,18 +20,25 @@ local defaultStyle = {
     edgeEnabled = true,
     edgeScale = 1.0,
     hideCountdownNumbers = false,
+    scanDepth = 10, -- Performance setting (Global)
 }
 
-local function CopyTable(src, dest)
+-- Utility function accessible globally
+function addon.CopyTable(src, dest)
     if not dest then dest = {} end
     for k, v in pairs(src) do
         if type(v) == "table" then
-            dest[k] = CopyTable(v, dest[k])
+            dest[k] = addon.CopyTable(v, dest[k])
         else
             dest[k] = v
         end
     end
     return dest
+end
+
+-- Function to retrieve defaults (used by GUI for resets)
+function addon.Config:GetDefaultStyle()
+    return defaultStyle
 end
 
 function addon.Config:Initialize()
@@ -42,10 +48,11 @@ function addon.Config:Initialize()
     
     for _, cat in ipairs(addon.Categories) do
         if not MinimalistCooldownEdgeDB[cat] then
-            MinimalistCooldownEdgeDB[cat] = CopyTable(defaultStyle)
-            -- Petite variation par défaut pour aider à la distinction
+            MinimalistCooldownEdgeDB[cat] = addon.CopyTable(defaultStyle)
+            -- Specific default for nameplates to be smaller
             if cat == "nameplate" then MinimalistCooldownEdgeDB[cat].fontSize = 12 end
         else
+            -- Inject missing keys if config version changed
             for k, v in pairs(defaultStyle) do
                 if MinimalistCooldownEdgeDB[cat][k] == nil then
                     MinimalistCooldownEdgeDB[cat][k] = v
@@ -57,7 +64,6 @@ end
 
 function addon.Config:Get(key, category)
     category = category or "global"
-    -- Si la catégorie demandée n'existe pas (ex: ancienne config 'auras'), on force 'global'
     if not MinimalistCooldownEdgeDB[category] then category = "global" end
     
     if MinimalistCooldownEdgeDB and MinimalistCooldownEdgeDB[category] then
@@ -71,7 +77,7 @@ function addon.Config:Set(key, value, category)
     category = category or "global"
     
     if not MinimalistCooldownEdgeDB[category] then
-        MinimalistCooldownEdgeDB[category] = CopyTable(defaultStyle)
+        MinimalistCooldownEdgeDB[category] = addon.CopyTable(defaultStyle)
     end
     
     MinimalistCooldownEdgeDB[category][key] = value
