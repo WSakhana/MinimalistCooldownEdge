@@ -58,7 +58,6 @@ local function RequiresReload(oldDB, newDB)
     if not oldDB or not newDB then return false end
 
     -- 1. Check if ANY setting in 'global' category changed
-    -- Changing scan depth or global parsing rules requires a fresh load.
     local oldGlobal = oldDB["global"]
     local newGlobal = newDB["global"]
     if oldGlobal and newGlobal then
@@ -70,7 +69,6 @@ local function RequiresReload(oldDB, newDB)
     end
 
     -- 2. Check if ANY category was DISABLED (True -> False)
-    -- We can apply styles live, but we cannot revert fonts/text colors to default without reload.
     for _, cat in ipairs(addon.Categories) do
         local oldCat = oldDB[cat]
         local newCat = newDB[cat]
@@ -94,7 +92,6 @@ local function SaveChanges()
         
         if needReload then
             StaticPopup_Show("MCE_CONFIRM_RELOAD")
-            -- We still force update in case the user says "Later", so enabled changes apply partially
             addon:ForceUpdateAll() 
         else
             addon:ForceUpdateAll()
@@ -107,14 +104,12 @@ local function ResetCurrentCategory()
     local defaults = addon.Config:GetDefaultStyle()
     tempDB[currentCategory] = addon.CopyTable(defaults)
     
-    -- [FIX] Restore default Enabled state logic
     if currentCategory == "actionbar" then
         tempDB[currentCategory].enabled = true
     else
         tempDB[currentCategory].enabled = false
     end
 
-    -- Restore default Font Size logic
     if currentCategory == "nameplate" or currentCategory == "unitframe" then 
         tempDB[currentCategory].fontSize = 12 
     end
@@ -127,14 +122,12 @@ local function ResetAllCategories()
     for _, cat in ipairs(addon.Categories) do
         tempDB[cat] = addon.CopyTable(defaults)
         
-        -- [FIX] Restore default Enabled state logic per category
         if cat == "actionbar" then
             tempDB[cat].enabled = true
         else
             tempDB[cat].enabled = false
         end
 
-        -- Restore default Font Size logic
         if cat == "nameplate" or cat == "unitframe" then 
             tempDB[cat].fontSize = 12 
         end
@@ -204,10 +197,10 @@ function addon.GUI:CreateOptionsPanel()
     local panel = CreateFrame("Frame", "MinimalistCooldownEdgeOptions", UIParent)
     panel.name = "MinimalistCooldownEdge"
     
-    -- TITLE
+    -- TITLE UPDATED HERE
     local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", 16, -16)
-    title:SetText("|cff00ff00MinimalistCooldownEdge|r (v1.6)")
+    title:SetText("|cff00ff00MinimalistCooldownEdge|r (v1.7)")
 
     local yOffset = -50 
 

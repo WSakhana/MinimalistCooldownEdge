@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.7] - 2026-01-26
+### Optimization
+- **Critical Performance Boost (Caching):** Implemented a smart caching system in `Core.lua`. The addon now remembers the category of a cooldown frame after the first scan. This changes the complexity from O(N) to O(1) for subsequent updates, drastically reducing CPU usage during heavy combat or in crowded raids.
+- **Garbage Collection:** Used weak tables for the cache to ensure memory is properly released when frames are hidden or destroyed.
+
 ## [1.6] - 2026-01-26
 ### Added
 - **Smart Reload Logic:** The options panel now automatically detects when "Global" settings (like Scan Depth) change or when a category is disabled. A popup will appear prompting for a UI Reload, which is required to fully revert styles or update deep scan rules.

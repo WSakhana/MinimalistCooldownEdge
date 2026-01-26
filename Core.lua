@@ -4,8 +4,17 @@ local addonName, addon = ...
 addon = addon or {}
 _G[addonName] = addon
 
+-- === OPTIMIZATION: CATEGORY CACHE ===
+-- Weak keys allow the Garbage Collector to clean up frames that no longer exist
+local categoryCache = setmetatable({}, { __mode = "k" })
+
 -- === DETECTION LOGIC ===
 local function GetCooldownCategory(cooldownFrame)
+    -- 1. CACHE CHECK: If we already know this frame, return immediately (O(1))
+    if categoryCache[cooldownFrame] then
+        return categoryCache[cooldownFrame]
+    end
+
     local current = cooldownFrame:GetParent()
     local depth = 0
     
@@ -18,9 +27,12 @@ local function GetCooldownCategory(cooldownFrame)
     -- CPU OPTIMIZATION: Fast Check for Standard Buttons
     local parentName = current and current:GetName() or ""
     if string.find(parentName, "BuffButton") or string.find(parentName, "DebuffButton") or string.find(parentName, "TempEnchant") then
+        categoryCache[cooldownFrame] = "global" -- Store in cache
         return "global" 
     end
     
+    local result = "global" -- Default fallback
+
     while current and current ~= UIParent and depth < maxDepth do
         local name = current:GetName() or ""
         local objType = current:GetObjectType()
@@ -31,7 +43,8 @@ local function GetCooldownCategory(cooldownFrame)
            or string.find(name, "Plater") 
            or string.find(name, "Kui") 
            or (current.unit and string.find(current.unit, "nameplate")) then
-            return "nameplate"
+            result = "nameplate"
+            break
         end
         
         -- 2. UNIT FRAMES
@@ -44,7 +57,8 @@ local function GetCooldownCategory(cooldownFrame)
            or string.find(name, "VuhDo") 
            or string.find(name, "SUF") 
            or string.find(name, "Grid") then
-            return "unitframe"
+            result = "unitframe"
+            break
         end
         
         -- 3. ACTION BARS
@@ -55,7 +69,8 @@ local function GetCooldownCategory(cooldownFrame)
            or string.find(name, "BT4") 
            or string.find(name, "Dominos") then
              if not string.find(name, "Aura") then
-                return "actionbar"
+                result = "actionbar"
+                break
              end
         end
         
@@ -63,7 +78,9 @@ local function GetCooldownCategory(cooldownFrame)
         depth = depth + 1
     end
 
-    return "global"
+    -- Save result to cache before returning
+    categoryCache[cooldownFrame] = result
+    return result
 end
 
 -- === STYLE APPLICATION ===
