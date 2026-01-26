@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3] - 2026-01-26
+### Changed
+- Updated version to 1.3 in .toc and GUI.
+- Improved event-driven initialization and hook logic in `Core.lua` for better compatibility and reliability.
+- Replaced bulk cooldown apply with robust hooks for `CooldownFrame_Set`, `CooldownFrame_SetTimer`, and `ActionButton_UpdateCooldown`.
+- GUI now uses a `RefreshVisuals()` helper for immediate updates when settings change.
+
 ## [1.2] - 2026-01-25
 ### Added
 - Configuration system with SavedVariables support (`Config.lua`)

@@ -21,6 +21,26 @@ local fontStyleOptions = {
     ["NONE"] = "None",
 }
 
+-- Helper: Refresh visuals immediately when settings change
+local function RefreshVisuals()
+    -- 1. Force Blizzard Action Bars to update
+    if ActionBarController_UpdateAll then
+        ActionBarController_UpdateAll()
+    end
+
+    -- 2. Manually trigger updates on visible action buttons (legacy/backup)
+    -- This helps ensure the hooks in Core.lua fire immediately
+    local frame = EnumerateFrames()
+    while frame do
+        if frame.IsObjectType and frame:IsObjectType("CheckButton") and frame.action and not frame:IsForbidden() then
+            if ActionButton_UpdateCooldown then
+                ActionButton_UpdateCooldown(frame)
+            end
+        end
+        frame = EnumerateFrames(frame)
+    end
+end
+
 -- Create the options panel
 function addon.GUI:CreateOptionsPanel()
     local panel = CreateFrame("Frame", "MinimalistCooldownEdgeOptions", UIParent)
@@ -34,7 +54,7 @@ function addon.GUI:CreateOptionsPanel()
     -- Version
     local version = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
     version:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
-    version:SetText("Version 1.2 - Customize your cooldown appearance")
+    version:SetText("Version 1.3 - Customize your cooldown appearance")
     
     local yOffset = -80
     
@@ -60,7 +80,7 @@ function addon.GUI:CreateOptionsPanel()
             info.func = function()
                 addon.Config:Set("font", path)
                 UIDropDownMenu_SetSelectedValue(fontDropdown, path)
-                addon:ApplyAllCooldowns()
+                RefreshVisuals()
             end
             info.checked = (addon.Config:Get("font") == path)
             UIDropDownMenu_AddButton(info)
@@ -83,14 +103,14 @@ function addon.GUI:CreateOptionsPanel()
     fontSizeSlider:SetValueStep(1)
     fontSizeSlider:SetObeyStepOnDrag(true)
     fontSizeSlider:SetWidth(200)
-    getglobal(fontSizeSlider:GetName() .. 'Low'):SetText('8')
-    getglobal(fontSizeSlider:GetName() .. 'High'):SetText('36')
-    getglobal(fontSizeSlider:GetName() .. 'Text'):SetText(addon.Config:Get("fontSize"))
+    _G[fontSizeSlider:GetName() .. 'Low']:SetText('8')
+    _G[fontSizeSlider:GetName() .. 'High']:SetText('36')
+    _G[fontSizeSlider:GetName() .. 'Text']:SetText(addon.Config:Get("fontSize"))
     fontSizeSlider:SetScript("OnValueChanged", function(self, value)
         value = math.floor(value + 0.5)
-        getglobal(self:GetName() .. 'Text'):SetText(value)
+        _G[self:GetName() .. 'Text']:SetText(value)
         addon.Config:Set("fontSize", value)
-        addon:ApplyAllCooldowns()
+        RefreshVisuals()
     end)
     
     yOffset = yOffset - 40
@@ -112,7 +132,7 @@ function addon.GUI:CreateOptionsPanel()
                 local styleValue = (value == "NONE") and nil or value
                 addon.Config:Set("fontStyle", styleValue)
                 UIDropDownMenu_SetSelectedValue(fontStyleDropdown, value)
-                addon:ApplyAllCooldowns()
+                RefreshVisuals()
             end
             local currentStyle = addon.Config:Get("fontStyle") or "NONE"
             info.checked = (currentStyle == value)
@@ -157,7 +177,7 @@ function addon.GUI:CreateOptionsPanel()
                 local na = ColorPickerFrame:GetColorAlpha()
                 addon.Config:Set("textColor", { r = nr, g = ng, b = nb, a = na })
                 textColorTexture:SetColorTexture(nr, ng, nb, na)
-                addon:ApplyAllCooldowns()
+                RefreshVisuals()
             end,
             cancelFunc = function(previousValues)
                 addon.Config:Set("textColor", { 
@@ -167,7 +187,7 @@ function addon.GUI:CreateOptionsPanel()
                     a = previousValues.opacity 
                 })
                 textColorTexture:SetColorTexture(previousValues.r, previousValues.g, previousValues.b, previousValues.opacity)
-                addon:ApplyAllCooldowns()
+                RefreshVisuals()
             end,
         }
         ColorPickerFrame:SetupColorPickerAndShow(info)
@@ -190,7 +210,7 @@ function addon.GUI:CreateOptionsPanel()
     edgeCheckbox.text:SetText("Enable Cooldown Edge")
     edgeCheckbox:SetScript("OnClick", function(self)
         addon.Config:Set("edgeEnabled", self:GetChecked())
-        addon:ApplyAllCooldowns()
+        RefreshVisuals()
     end)
     
     yOffset = yOffset - 30
@@ -207,13 +227,13 @@ function addon.GUI:CreateOptionsPanel()
     edgeScaleSlider:SetValueStep(0.1)
     edgeScaleSlider:SetObeyStepOnDrag(true)
     edgeScaleSlider:SetWidth(200)
-    getglobal(edgeScaleSlider:GetName() .. 'Low'):SetText('0.5')
-    getglobal(edgeScaleSlider:GetName() .. 'High'):SetText('2.0')
-    getglobal(edgeScaleSlider:GetName() .. 'Text'):SetText(string.format("%.1f", addon.Config:Get("edgeScale")))
+    _G[edgeScaleSlider:GetName() .. 'Low']:SetText('0.5')
+    _G[edgeScaleSlider:GetName() .. 'High']:SetText('2.0')
+    _G[edgeScaleSlider:GetName() .. 'Text']:SetText(string.format("%.1f", addon.Config:Get("edgeScale")))
     edgeScaleSlider:SetScript("OnValueChanged", function(self, value)
-        getglobal(self:GetName() .. 'Text'):SetText(string.format("%.1f", value))
+        _G[self:GetName() .. 'Text']:SetText(string.format("%.1f", value))
         addon.Config:Set("edgeScale", value)
-        addon:ApplyAllCooldowns()
+        RefreshVisuals()
     end)
     
     yOffset = yOffset - 50
