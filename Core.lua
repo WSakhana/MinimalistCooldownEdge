@@ -15,13 +15,8 @@ local function ApplyCustomStyle(self)
     local edgeEnabled = config:Get("edgeEnabled")
     local edgeScale = config:Get("edgeScale")
     local hideCountdown = config:Get("hideCountdownNumbers")
-    local font = config:Get("font")
-    local fontSize = config:Get("fontSize")
-    local fontStyle = config:Get("fontStyle")
-    local textColor = config:Get("textColor")
-
+    
     -- 1. Edge style
-    -- Check if the method exists to be safe on all frame types
     if self.SetDrawEdge then
         if edgeEnabled then
             self:SetDrawEdge(true)
@@ -36,21 +31,25 @@ local function ApplyCustomStyle(self)
         self:SetHideCountdownNumbers(hideCountdown)
     end
     
-    -- Iterate regions to find the timer text (works for both ActionBars and WA)
+    -- Custom Font/Color Application
+    local font = config:Get("font")
+    local fontSize = config:Get("fontSize")
+    local fontStyle = config:Get("fontStyle")
+    local textColor = config:Get("textColor")
+
     local regions = {self:GetRegions()}
     for _, region in ipairs(regions) do
-        if region:IsObjectType("FontString") then
+        if region:GetObjectType() == "FontString" then
             region:SetFont(font, fontSize, fontStyle)
             if textColor then
-                region:SetTextColor(textColor.r or textColor[1], textColor.g or textColor[2], textColor.b or textColor[3], textColor.a or textColor[4])
+                region:SetTextColor(textColor.r, textColor.g, textColor.b, textColor.a)
             end
         end
     end
 end
 
--- Hook into updates
 local function SetupHooks()
-    -- 1. GLOBAL HOOK: Catches WeakAuras, Nameplates, Buffs, UnitFrames
+    -- 1. GLOBAL HOOK: Catches Nameplates, Buffs, UnitFrames
     hooksecurefunc("CooldownFrame_Set", function(self)
         ApplyCustomStyle(self)
     end)
@@ -62,12 +61,25 @@ local function SetupHooks()
     end
 
     -- 2. ACTION BAR SPECIFIC HOOK: Mandatory for Blizzard Action Bars
-    -- Action Bars use a specific update function that sometimes bypasses the global setter visually
     hooksecurefunc("ActionButton_UpdateCooldown", function(self)
         if self.cooldown then
             ApplyCustomStyle(self.cooldown)
         end
     end)
+
+    -- 3. BARTENDER / LIBACTIONBUTTON COMPATIBILITY
+    -- Bartender4 uses LibActionButton-1.0. We register a callback 
+    -- to style buttons whenever the library updates them.
+    if LibStub then
+        local LAB = LibStub("LibActionButton-1.0", true)
+        if LAB then
+            LAB:RegisterCallback("OnButtonUpdate", function(_, button)
+                if button.cooldown then
+                    ApplyCustomStyle(button.cooldown)
+                end
+            end)
+        end
+    end
 end
 
 -- Initialize addon
@@ -83,12 +95,9 @@ eventFrame:SetScript("OnEvent", function(self, event, loadedAddon)
     elseif event == "PLAYER_LOGIN" then
         SetupHooks()
         
-        -- Force a one-time update on visible Action Bars on login
-        -- This fixes buttons that are already on CD when you log in
+        -- Force a update on login for visible bars
         if ActionBarController_UpdateAll then
             ActionBarController_UpdateAll()
         end
-
-        self:UnregisterEvent("PLAYER_LOGIN")
     end
 end)
