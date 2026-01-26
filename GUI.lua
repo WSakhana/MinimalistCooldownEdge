@@ -23,21 +23,10 @@ local fontStyleOptions = {
 
 -- Helper: Refresh visuals immediately when settings change
 local function RefreshVisuals()
-    -- 1. Force Blizzard Action Bars to update
-    if ActionBarController_UpdateAll then
-        ActionBarController_UpdateAll()
-    end
-
-    -- 2. Manually trigger updates on visible action buttons (legacy/backup)
-    -- This helps ensure the hooks in Core.lua fire immediately
-    local frame = EnumerateFrames()
-    while frame do
-        if frame.IsObjectType and frame:IsObjectType("CheckButton") and frame.action and not frame:IsForbidden() then
-            if ActionButton_UpdateCooldown then
-                ActionButton_UpdateCooldown(frame)
-            end
-        end
-        frame = EnumerateFrames(frame)
+    -- We use the safe manual update method from Core.lua
+    -- calling ActionBarController_UpdateAll here would cause Taint errors.
+    if addon.ForceUpdateAll then
+        addon:ForceUpdateAll()
     end
 end
 
@@ -54,7 +43,7 @@ function addon.GUI:CreateOptionsPanel()
     -- Version
     local version = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
     version:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
-    version:SetText("Version 1.3 - Customize your cooldown appearance")
+    version:SetText("Version 1.4 - Customize your cooldown appearance")
     
     local yOffset = -80
     
@@ -282,6 +271,12 @@ StaticPopupDialogs["MCE_CONFIRM_RESET"] = {
 SLASH_MINIMALISTCOOLDOWNEDGE1 = "/mce"
 SLASH_MINIMALISTCOOLDOWNEDGE2 = "/minimalistcooldownedge"
 SlashCmdList["MINIMALISTCOOLDOWNEDGE"] = function(msg)
+    -- FIX: Check for combat before attempting to open UI
+    if InCombatLockdown() then
+        print("|cff00ff00MinimalistCooldownEdge:|r Cannot open settings while in combat.")
+        return
+    end
+    
     Settings.OpenToCategory(addon.optionsCategory:GetID())
 end
 

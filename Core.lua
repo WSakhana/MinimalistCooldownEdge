@@ -5,7 +5,8 @@ addon = addon or {}
 _G[addonName] = addon
 
 -- Apply custom style to a cooldown frame
-local function ApplyCustomStyle(self)
+function addon:ApplyCustomStyle(self)
+    -- 1. SECURITY CHECK
     if not self or self:IsForbidden() then return end
 
     local config = addon.Config
@@ -16,67 +17,94 @@ local function ApplyCustomStyle(self)
     local edgeScale = config:Get("edgeScale")
     local hideCountdown = config:Get("hideCountdownNumbers")
     
-    -- 1. Edge style
+    -- Use pcall for safety against transient protection
     if self.SetDrawEdge then
-        if edgeEnabled then
-            self:SetDrawEdge(true)
-            self:SetEdgeScale(edgeScale)
-        else
-            self:SetDrawEdge(false)
-        end
+        pcall(function()
+            if edgeEnabled then
+                self:SetDrawEdge(true)
+                self:SetEdgeScale(edgeScale)
+            else
+                self:SetDrawEdge(false)
+            end
+        end)
     end
     
-    -- 2. Cooldown Timer Text Style
     if self.SetHideCountdownNumbers then
-        self:SetHideCountdownNumbers(hideCountdown)
+        pcall(function() self:SetHideCountdownNumbers(hideCountdown) end)
     end
     
-    -- Custom Font/Color Application
-    local font = config:Get("font")
-    local fontSize = config:Get("fontSize")
-    local fontStyle = config:Get("fontStyle")
-    local textColor = config:Get("textColor")
+    -- Font/Color Application
+    if self.GetRegions then
+        local font = config:Get("font")
+        local fontSize = config:Get("fontSize")
+        local fontStyle = config:Get("fontStyle")
+        local textColor = config:Get("textColor")
 
-    local regions = {self:GetRegions()}
-    for _, region in ipairs(regions) do
-        if region:GetObjectType() == "FontString" then
-            region:SetFont(font, fontSize, fontStyle)
-            if textColor then
-                region:SetTextColor(textColor.r, textColor.g, textColor.b, textColor.a)
+        local regions = {self:GetRegions()}
+        for _, region in ipairs(regions) do
+            if region:GetObjectType() == "FontString" and not region:IsForbidden() then
+                region:SetFont(font, fontSize, fontStyle)
+                if textColor then
+                    region:SetTextColor(textColor.r, textColor.g, textColor.b, textColor.a)
+                end
             end
         end
     end
 end
 
+-- Helper to safely refresh all visible cooldowns manually
+-- This replaces ActionBarController_UpdateAll which causes Taint/Blocks
+function addon:ForceUpdateAll()
+    local frame = EnumerateFrames()
+    while frame do
+        if frame.IsForbidden and not frame:IsForbidden() then
+            -- Check for Cooldown object directly
+            if frame:IsObjectType("Cooldown") then
+                addon:ApplyCustomStyle(frame)
+            -- Check for buttons that have a .cooldown property
+            elseif frame.cooldown and frame.cooldown.IsForbidden and not frame.cooldown:IsForbidden() then
+                addon:ApplyCustomStyle(frame.cooldown)
+            end
+        end
+        frame = EnumerateFrames(frame)
+    end
+end
+
 local function SetupHooks()
-    -- 1. GLOBAL HOOK: Catches Nameplates, Buffs, UnitFrames
+    -- 1. GENERIC COOLDOWN HOOK (Safe)
     hooksecurefunc("CooldownFrame_Set", function(self)
-        ApplyCustomStyle(self)
+        if self and not self:IsForbidden() then
+            C_Timer.After(0, function()
+                if self and not self:IsForbidden() then
+                    addon:ApplyCustomStyle(self)
+                end
+            end)
+        end
     end)
     
+    -- 2. TIMER HOOK (Safe)
     if CooldownFrame_SetTimer then 
          hooksecurefunc("CooldownFrame_SetTimer", function(self)
-            ApplyCustomStyle(self)
+            if self and not self:IsForbidden() then
+                C_Timer.After(0, function()
+                    if self and not self:IsForbidden() then
+                        addon:ApplyCustomStyle(self)
+                    end
+                end)
+            end
         end)
     end
 
-    -- 2. ACTION BAR SPECIFIC HOOK: Mandatory for Blizzard Action Bars
-    hooksecurefunc("ActionButton_UpdateCooldown", function(self)
-        if self.cooldown then
-            ApplyCustomStyle(self.cooldown)
-        end
-    end)
-
     -- 3. BARTENDER / LIBACTIONBUTTON COMPATIBILITY
-    -- Bartender4 uses LibActionButton-1.0. We register a callback 
-    -- to style buttons whenever the library updates them.
     if LibStub then
         local LAB = LibStub("LibActionButton-1.0", true)
         if LAB then
             LAB:RegisterCallback("OnButtonUpdate", function(_, button)
-                if button.cooldown then
-                    ApplyCustomStyle(button.cooldown)
-                end
+                C_Timer.After(0, function()
+                    if button and button.cooldown then
+                        addon:ApplyCustomStyle(button.cooldown)
+                    end
+                end)
             end)
         end
     end
@@ -95,9 +123,9 @@ eventFrame:SetScript("OnEvent", function(self, event, loadedAddon)
     elseif event == "PLAYER_LOGIN" then
         SetupHooks()
         
-        -- Force a update on login for visible bars
-        if ActionBarController_UpdateAll then
-            ActionBarController_UpdateAll()
-        end
+        -- Force a visual refresh on login WITHOUT triggering StanceBar Taint
+        C_Timer.After(2, function()
+            addon:ForceUpdateAll()
+        end)
     end
 end)

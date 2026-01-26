@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.4] - 2026-01-26
+### Changed
+- **Major Refactor:** Completely rewrote the hooking mechanism to avoid "Taint" errors. The addon now targets generic `CooldownFrame` events instead of invasive `ActionButton` hooks.
+- Implemented `C_Timer.After` execution delays (0-frame delay) to ensure style application never interferes with Blizzard's Secure Execution Path.
+- Enhanced compatibility with **Bartender4** and other addons using `LibActionButton-1.0`.
+- Replaced unsafe `ActionBarController_UpdateAll` calls with a custom, non-tainting manual refresh method.
+
+### Fixed
+- Resolved critical `ADDON_ACTION_BLOCKED` errors that were breaking Stance/Shape-shift bars.
+- Fixed `attempt to compare a secret value` Lua errors caused by modifying secure action buttons during updates.
+- Fixed a crash when attempting to open the Options Panel (`/mce`) while in combat; the command now checks for `InCombatLockdown()` properly.
+
 ## [1.3] - 2026-01-26
 ### Changed
 - Updated version to 1.3 in .toc and GUI.
