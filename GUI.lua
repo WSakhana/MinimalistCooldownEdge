@@ -23,6 +23,18 @@ local categoryLabels = {
 
 local uiElements = {}
 
+-- === RELOAD DIALOG ===
+StaticPopupDialogs["MCE_CONFIRM_RELOAD"] = {
+    text = "|cff00ff00MinimalistCooldownEdge|r\n\nChanges to Global Settings or disabling a category require a UI Reload to fully take effect.\n\nReload now?",
+    button1 = "Reload",
+    button2 = "Later",
+    OnAccept = function() ReloadUI() end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
 -- === TEMP DB MANAGEMENT ===
 
 local function InitTempDB()
@@ -42,11 +54,52 @@ local function SetTemp(key, value)
     tempDB[currentCategory][key] = value
 end
 
+local function RequiresReload(oldDB, newDB)
+    if not oldDB or not newDB then return false end
+
+    -- 1. Check if ANY setting in 'global' category changed
+    -- Changing scan depth or global parsing rules requires a fresh load.
+    local oldGlobal = oldDB["global"]
+    local newGlobal = newDB["global"]
+    if oldGlobal and newGlobal then
+        for k, v in pairs(newGlobal) do
+            if type(v) ~= "table" and oldGlobal[k] ~= v then
+                return true
+            end
+        end
+    end
+
+    -- 2. Check if ANY category was DISABLED (True -> False)
+    -- We can apply styles live, but we cannot revert fonts/text colors to default without reload.
+    for _, cat in ipairs(addon.Categories) do
+        local oldCat = oldDB[cat]
+        local newCat = newDB[cat]
+        if oldCat and newCat then
+            if oldCat.enabled == true and newCat.enabled == false then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
 local function SaveChanges()
     if tempDB then
+        -- Check requirement BEFORE overwriting the live DB
+        local needReload = RequiresReload(MinimalistCooldownEdgeDB, tempDB)
+
+        -- Commit Changes
         MinimalistCooldownEdgeDB = addon.CopyTable(tempDB)
-        addon:ForceUpdateAll()
-        print("|cff00ff00MCE:|r Configuration Saved & Applied.")
+        
+        if needReload then
+            StaticPopup_Show("MCE_CONFIRM_RELOAD")
+            -- We still force update in case the user says "Later", so enabled changes apply partially
+            addon:ForceUpdateAll() 
+        else
+            addon:ForceUpdateAll()
+            print("|cff00ff00MCE:|r Configuration Saved & Applied.")
+        end
     end
 end
 
@@ -154,7 +207,7 @@ function addon.GUI:CreateOptionsPanel()
     -- TITLE
     local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", 16, -16)
-    title:SetText("|cff00ff00MinimalistCooldownEdge|r (v1.5)")
+    title:SetText("|cff00ff00MinimalistCooldownEdge|r (v1.6)")
 
     local yOffset = -50 
 
