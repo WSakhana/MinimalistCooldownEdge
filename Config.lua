@@ -13,6 +13,7 @@ addon.Categories = {
 
 -- Default Style
 local defaultStyle = {
+    enabled = true, -- Base value (overridden in Initialize based on category)
     font = "Fonts\\FRIZQT__.TTF",
     fontSize = 18,
     fontStyle = "OUTLINE",
@@ -49,9 +50,19 @@ function addon.Config:Initialize()
     for _, cat in ipairs(addon.Categories) do
         if not MinimalistCooldownEdgeDB[cat] then
             MinimalistCooldownEdgeDB[cat] = addon.CopyTable(defaultStyle)
-            -- Specific default for nameplates to be smaller
-            if cat == "nameplate" then MinimalistCooldownEdgeDB[cat].fontSize = 12 end
-            if cat == "unitframe" then MinimalistCooldownEdgeDB[cat].fontSize = 12 end
+            
+            -- [UPDATED] Default State Logic:
+            -- Only enable Action Bars by default. Disable everything else.
+            if cat == "actionbar" then
+                MinimalistCooldownEdgeDB[cat].enabled = true
+            else
+                MinimalistCooldownEdgeDB[cat].enabled = false
+            end
+
+            -- Specific default for nameplates/unitframes to be smaller
+            if cat == "nameplate" or cat == "unitframe" then 
+                MinimalistCooldownEdgeDB[cat].fontSize = 12 
+            end
         else
             -- Inject missing keys if config version changed
             for k, v in pairs(defaultStyle) do

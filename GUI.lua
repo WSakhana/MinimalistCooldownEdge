@@ -54,11 +54,15 @@ local function ResetCurrentCategory()
     local defaults = addon.Config:GetDefaultStyle()
     tempDB[currentCategory] = addon.CopyTable(defaults)
     
-    if currentCategory == "nameplate" then 
-        tempDB[currentCategory].fontSize = 12 
+    -- [FIX] Restore default Enabled state logic
+    if currentCategory == "actionbar" then
+        tempDB[currentCategory].enabled = true
+    else
+        tempDB[currentCategory].enabled = false
     end
 
-    if currentCategory == "unitframe" then 
+    -- Restore default Font Size logic
+    if currentCategory == "nameplate" or currentCategory == "unitframe" then 
         tempDB[currentCategory].fontSize = 12 
     end
 
@@ -69,14 +73,23 @@ local function ResetAllCategories()
     local defaults = addon.Config:GetDefaultStyle()
     for _, cat in ipairs(addon.Categories) do
         tempDB[cat] = addon.CopyTable(defaults)
-        if cat == "nameplate" then tempDB[cat].fontSize = 12 end
-        if cat == "unitframe" then tempDB[cat].fontSize = 12 end
+        
+        -- [FIX] Restore default Enabled state logic per category
+        if cat == "actionbar" then
+            tempDB[cat].enabled = true
+        else
+            tempDB[cat].enabled = false
+        end
+
+        -- Restore default Font Size logic
+        if cat == "nameplate" or cat == "unitframe" then 
+            tempDB[cat].fontSize = 12 
+        end
     end
     print("|cff00ff00MCE:|r All categories reset to defaults.")
 end
 
 -- === HELPER: CREATE VALUE LABEL ===
--- Creates a label to the RIGHT of the slider to show the number cleanly
 local function CreateValueLabel(slider, initialValue)
     local valText = slider:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     valText:SetPoint("LEFT", slider, "RIGHT", 10, 0)
@@ -88,6 +101,9 @@ end
 -- === GUI UPDATE ===
 
 local function UpdateGUIValues()
+    -- Enable/Disable Category Checkbox
+    uiElements.enabledCheckbox:SetChecked(GetTemp("enabled"))
+
     -- Font
     local currentFont = GetTemp("font") or "Fonts\\FRIZQT__.TTF"
     UIDropDownMenu_SetText(uiElements.fontDropdown, fontOptions[currentFont] or "Custom")
@@ -140,7 +156,7 @@ function addon.GUI:CreateOptionsPanel()
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("|cff00ff00MinimalistCooldownEdge|r (v1.5)")
 
-    local yOffset = -60
+    local yOffset = -50 
 
     -- 1. CATEGORY SELECTOR
     local catLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
@@ -167,7 +183,7 @@ function addon.GUI:CreateOptionsPanel()
     UIDropDownMenu_SetSelectedValue(catDropdown, currentCategory)
     UIDropDownMenu_SetText(catDropdown, categoryLabels[currentCategory])
     
-    yOffset = yOffset - 50
+    yOffset = yOffset - 40 
 
     -- SEPARATOR LINE
     local line1 = panel:CreateTexture(nil, "ARTWORK")
@@ -176,12 +192,23 @@ function addon.GUI:CreateOptionsPanel()
     line1:SetPoint("TOPLEFT", 10, yOffset)
     line1:SetPoint("TOPRIGHT", -10, yOffset)
     
-    yOffset = yOffset - 25
+    yOffset = yOffset - 20 
     
     local sectionCat = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     sectionCat:SetPoint("TOPLEFT", 16, yOffset)
     sectionCat:SetText("Category Parameters")
     
+    yOffset = yOffset - 30
+
+    -- ENABLE CATEGORY CHECKBOX
+    local enableCb = CreateFrame("CheckButton", "MCE_EnableCategoryCheckbox", panel, "UICheckButtonTemplate")
+    enableCb:SetPoint("TOPLEFT", 20, yOffset)
+    uiElements.enabledCheckbox = enableCb
+    _G[enableCb:GetName().."Text"]:SetText("|cffffd100Enable this Category|r")
+    enableCb:SetScript("OnClick", function(self)
+        SetTemp("enabled", self:GetChecked())
+    end)
+
     yOffset = yOffset - 40
 
     -- FONT FACE
@@ -207,7 +234,7 @@ function addon.GUI:CreateOptionsPanel()
         end
     end)
 
-    yOffset = yOffset - 55 
+    yOffset = yOffset - 50 
 
     -- === ROW: SIZE | STYLE | COLOR ===
 
@@ -218,11 +245,11 @@ function addon.GUI:CreateOptionsPanel()
     sizeSlider:SetMinMaxValues(8, 36)
     sizeSlider:SetValueStep(1)
     sizeSlider:SetObeyStepOnDrag(true)
-    _G[sizeSlider:GetName() .. 'Text']:SetText("") -- Hide default top text to avoid clutter
+    _G[sizeSlider:GetName() .. 'Text']:SetText("") 
     _G[sizeSlider:GetName() .. 'Low']:SetText('8')
     _G[sizeSlider:GetName() .. 'High']:SetText('36')
     
-    CreateValueLabel(sizeSlider, "18") -- Value on the right
+    CreateValueLabel(sizeSlider, "18") 
     
     local sizeLabel = sizeSlider:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     sizeLabel:SetPoint("BOTTOMLEFT", sizeSlider, "TOPLEFT", 0, 4) 
@@ -234,7 +261,7 @@ function addon.GUI:CreateOptionsPanel()
         SetTemp("fontSize", value)
     end)
 
-    -- 2. FONT STYLE (Aligned to right of Slider + Value)
+    -- 2. FONT STYLE 
     local styleDropdown = CreateFrame("Frame", "MCE_FontStyleDropdown", panel, "UIDropDownMenuTemplate")
     styleDropdown:SetPoint("LEFT", sizeSlider, "RIGHT", 40, 2)
     uiElements.fontStyleDropdown = styleDropdown
@@ -260,7 +287,7 @@ function addon.GUI:CreateOptionsPanel()
     styleLabel:SetPoint("BOTTOMLEFT", styleDropdown, "TOPLEFT", 18, 5)
     styleLabel:SetText("Outline Style")
 
-    -- 3. COLOR (Aligned right of Style)
+    -- 3. COLOR
     local colorButton = CreateFrame("Button", "MCE_ColorButton", panel)
     colorButton:SetPoint("LEFT", styleDropdown, "RIGHT", 15, 2)
     colorButton:SetSize(24, 24)
@@ -290,7 +317,7 @@ function addon.GUI:CreateOptionsPanel()
         ColorPickerFrame:SetupColorPickerAndShow(info)
     end)
     
-    yOffset = yOffset - 75
+    yOffset = yOffset - 60 
 
     -- EDGE CHECKBOX
     local edgeCb = CreateFrame("CheckButton", "MCE_EdgeCheckbox", panel, "UICheckButtonTemplate")
@@ -308,11 +335,11 @@ function addon.GUI:CreateOptionsPanel()
     scaleSlider:SetMinMaxValues(0.5, 2.0)
     scaleSlider:SetValueStep(0.1)
     scaleSlider:SetObeyStepOnDrag(true)
-    _G[scaleSlider:GetName() .. 'Text']:SetText("") -- Clear default
+    _G[scaleSlider:GetName() .. 'Text']:SetText("") 
     _G[scaleSlider:GetName() .. 'Low']:SetText('0.5')
     _G[scaleSlider:GetName() .. 'High']:SetText('2.0')
     
-    CreateValueLabel(scaleSlider, "1.0") -- Value on the right
+    CreateValueLabel(scaleSlider, "1.0") 
 
     local scaleLabel = scaleSlider:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     scaleLabel:SetPoint("BOTTOMLEFT", scaleSlider, "TOPLEFT", 0, 4)
@@ -323,7 +350,7 @@ function addon.GUI:CreateOptionsPanel()
         SetTemp("edgeScale", value)
     end)
     
-    yOffset = yOffset - 85
+    yOffset = yOffset - 50 
 
     -- GLOBAL HEADER
     local globalHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
@@ -331,7 +358,7 @@ function addon.GUI:CreateOptionsPanel()
     globalHeader:SetText("Global Addon Settings")
     uiElements.globalHeader = globalHeader
     
-    yOffset = yOffset - 45
+    yOffset = yOffset - 35 
     
     -- DEPTH SLIDER
     local scanSlider = CreateFrame("Slider", "MCE_ScanDepthSlider", panel, "OptionsSliderTemplate")
@@ -340,11 +367,11 @@ function addon.GUI:CreateOptionsPanel()
     scanSlider:SetMinMaxValues(1, 20)
     scanSlider:SetValueStep(1)
     scanSlider:SetObeyStepOnDrag(true)
-    _G[scanSlider:GetName() .. 'Text']:SetText("") -- Clear default
+    _G[scanSlider:GetName() .. 'Text']:SetText("") 
     _G[scanSlider:GetName() .. 'Low']:SetText('1')
     _G[scanSlider:GetName() .. 'High']:SetText('20')
     
-    CreateValueLabel(scanSlider, "10") -- Value on the right
+    CreateValueLabel(scanSlider, "10") 
     
     local scanLabel = scanSlider:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     scanLabel:SetPoint("BOTTOMLEFT", scanSlider, "TOPLEFT", 0, 4)
@@ -352,9 +379,9 @@ function addon.GUI:CreateOptionsPanel()
     
     -- DETAILED DESCRIPTION BELOW
     local scanDesc = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    scanDesc:SetPoint("TOPLEFT", scanSlider, "BOTTOMLEFT", -5, -15)
+    scanDesc:SetPoint("TOPLEFT", scanSlider, "BOTTOMLEFT", -5, -10)
     scanDesc:SetJustifyH("LEFT")
-    scanDesc:SetSpacing(3)
+    scanDesc:SetSpacing(2)
     scanDesc:SetText(
         "|cffffd700Controls how deep the addon searches for parent frames.|r\n" ..
         "- |cff00ff00Low (1-10):|r Efficient. Sufficient for default UI and simple addons.\n" ..

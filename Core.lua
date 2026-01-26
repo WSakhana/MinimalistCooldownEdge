@@ -16,7 +16,6 @@ local function GetCooldownCategory(cooldownFrame)
     end
     
     -- CPU OPTIMIZATION: Fast Check for Standard Buttons
-    -- Return "global" immediately for standard Blizzard buffs to avoid scanning
     local parentName = current and current:GetName() or ""
     if string.find(parentName, "BuffButton") or string.find(parentName, "DebuffButton") or string.find(parentName, "TempEnchant") then
         return "global" 
@@ -35,7 +34,7 @@ local function GetCooldownCategory(cooldownFrame)
             return "nameplate"
         end
         
-        -- 2. UNIT FRAMES (Player, Target, Group, etc.)
+        -- 2. UNIT FRAMES
         if string.find(name, "PlayerFrame") 
            or string.find(name, "TargetFrame") 
            or string.find(name, "FocusFrame") 
@@ -55,7 +54,6 @@ local function GetCooldownCategory(cooldownFrame)
            or string.find(name, "MultiBar") 
            or string.find(name, "BT4") 
            or string.find(name, "Dominos") then
-             -- Safety: Ensure it's not an Aura on a secure button
              if not string.find(name, "Aura") then
                 return "actionbar"
              end
@@ -65,7 +63,6 @@ local function GetCooldownCategory(cooldownFrame)
         depth = depth + 1
     end
 
-    -- Everything else falls into Global
     return "global"
 end
 
@@ -78,6 +75,18 @@ function addon:ApplyCustomStyle(self)
     
     local category = GetCooldownCategory(self)
     
+    -- [NEW] GATEKEEPER: Check if category is enabled
+    local isEnabled = config:Get("enabled", category)
+    
+    if not isEnabled then
+        -- If disabled, ensure we clean up the edge and exit
+        if self.SetDrawEdge then 
+            pcall(function() self:SetDrawEdge(false) end) 
+        end
+        return 
+    end
+    
+    -- Logic below only runs if Category is ENABLED
     local edgeEnabled = config:Get("edgeEnabled", category)
     local edgeScale = config:Get("edgeScale", category)
     local hideCountdown = config:Get("hideCountdownNumbers", category)
