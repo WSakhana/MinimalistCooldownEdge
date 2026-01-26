@@ -51,6 +51,7 @@ function addon.Config:Initialize()
             MinimalistCooldownEdgeDB[cat] = addon.CopyTable(defaultStyle)
             -- Specific default for nameplates to be smaller
             if cat == "nameplate" then MinimalistCooldownEdgeDB[cat].fontSize = 12 end
+            if cat == "unitframe" then MinimalistCooldownEdgeDB[cat].fontSize = 12 end
         else
             -- Inject missing keys if config version changed
             for k, v in pairs(defaultStyle) do

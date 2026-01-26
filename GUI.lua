@@ -58,6 +58,10 @@ local function ResetCurrentCategory()
         tempDB[currentCategory].fontSize = 12 
     end
 
+    if currentCategory == "unitframe" then 
+        tempDB[currentCategory].fontSize = 12 
+    end
+
     print("|cff00ff00MCE:|r Reset defaults for: " .. (categoryLabels[currentCategory] or currentCategory))
 end
 
@@ -66,6 +70,7 @@ local function ResetAllCategories()
     for _, cat in ipairs(addon.Categories) do
         tempDB[cat] = addon.CopyTable(defaults)
         if cat == "nameplate" then tempDB[cat].fontSize = 12 end
+        if cat == "unitframe" then tempDB[cat].fontSize = 12 end
     end
     print("|cff00ff00MCE:|r All categories reset to defaults.")
 end
