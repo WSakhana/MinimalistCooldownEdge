@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.8] - 2026-01-27
+### Fixed
+- **Glider Compatibility:** Fixed an issue where enabling the "Global" category would incorrectly attach cooldown styles to the **Glider** addon's speedometer.
+- **Hardcoded Blacklist:** Implemented a blacklist system in `Core.lua`. The addon now immediately ignores frames containing specific keywords (currently "Glider") during the detection scan. This prevents interference with incompatible addons and reduces CPU usage by skipping them entirely.
+
 ## [1.7] - 2026-01-26
 ### Optimization
 - **Critical Performance Boost (Caching):** Implemented a smart caching system in `Core.lua`. The addon now remembers the category of a cooldown frame after the first scan. This changes the complexity from O(N) to O(1) for subsequent updates, drastically reducing CPU usage during heavy combat or in crowded raids.

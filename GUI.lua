@@ -200,7 +200,7 @@ function addon.GUI:CreateOptionsPanel()
     -- TITLE UPDATED HERE
     local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", 16, -16)
-    title:SetText("|cff00ff00MinimalistCooldownEdge|r (v1.7)")
+    title:SetText("|cff00ff00MinimalistCooldownEdge|r (v1.8)")
 
     local yOffset = -50 
 

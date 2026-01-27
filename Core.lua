@@ -4,6 +4,13 @@ local addonName, addon = ...
 addon = addon or {}
 _G[addonName] = addon
 
+-- === HARDCODED BLACKLIST ===
+-- Add partial or full names of frames/addons to ignore here.
+local hardcodedBlacklist = {
+    "Glider",
+    -- "RipWeakAuras", -- Example: Add this if you wanted to ignore WeakAuras
+}
+
 -- === OPTIMIZATION: CATEGORY CACHE ===
 -- Weak keys allow the Garbage Collector to clean up frames that no longer exist
 local categoryCache = setmetatable({}, { __mode = "k" })
@@ -37,6 +44,14 @@ local function GetCooldownCategory(cooldownFrame)
         local name = current:GetName() or ""
         local objType = current:GetObjectType()
         
+        -- 0. BLACKLIST CHECK (New Priority)
+        for _, blockedKey in ipairs(hardcodedBlacklist) do
+            if string.find(name, blockedKey) then
+                categoryCache[cooldownFrame] = "blacklist"
+                return "blacklist"
+            end
+        end
+
         -- 1. NAMEPLATES
         if objType == "NamePlate" 
            or string.find(name, "NamePlate") 
@@ -91,6 +106,11 @@ function addon:ApplyCustomStyle(self)
     if not config then return end
     
     local category = GetCooldownCategory(self)
+
+    -- [NEW] BLACKLIST CHECK
+    if category == "blacklist" then
+        return -- Do absolutely nothing for blacklisted frames
+    end
     
     -- [NEW] GATEKEEPER: Check if category is enabled
     local isEnabled = config:Get("enabled", category)
