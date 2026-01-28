@@ -100,7 +100,9 @@ end
 
 -- === STYLE APPLICATION ===
 function addon:ApplyCustomStyle(self)
-    if not self or self:IsForbidden() then return end
+    -- [FIX] Wrapped in pcall to prevent crashes on Secret/Protected frames
+    local safe, isForbidden = pcall(function() return not self or self:IsForbidden() end)
+    if not safe or isForbidden then return end
 
     local config = addon.Config
     if not config then return end
@@ -177,18 +179,29 @@ end
 
 local function SetupHooks()
     hooksecurefunc("CooldownFrame_Set", function(self)
-        if self and not self:IsForbidden() then
+        -- [FIX] Use pcall to check for forbidden status without crashing on secret frames
+        local safe, isForbidden = pcall(function() return self:IsForbidden() end)
+        if safe and not isForbidden then
             C_Timer.After(0, function()
-                if self and not self:IsForbidden() then addon:ApplyCustomStyle(self) end
+                -- Check again inside timer (frame might have become forbidden or nil)
+                local safeT, isForbiddenT = pcall(function() return self:IsForbidden() end)
+                if safeT and not isForbiddenT then 
+                    addon:ApplyCustomStyle(self) 
+                end
             end)
         end
     end)
     
     if CooldownFrame_SetTimer then 
          hooksecurefunc("CooldownFrame_SetTimer", function(self)
-            if self and not self:IsForbidden() then
+            -- [FIX] Applied same safety logic here
+            local safe, isForbidden = pcall(function() return self:IsForbidden() end)
+            if safe and not isForbidden then
                 C_Timer.After(0, function()
-                    if self and not self:IsForbidden() then addon:ApplyCustomStyle(self) end
+                    local safeT, isForbiddenT = pcall(function() return self:IsForbidden() end)
+                    if safeT and not isForbiddenT then 
+                        addon:ApplyCustomStyle(self) 
+                    end
                 end)
             end
         end)
