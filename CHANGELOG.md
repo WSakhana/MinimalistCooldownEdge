@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.9.2] - 2026-01-28
+### Added
+- **Cyrillic Font Support:** Added "Friz Quadrata (Cyrillic)" to the font selection dropdown in the Options panel. This ensures correct character rendering for Russian clients and other Cyrillic users who previously saw question marks (`????`) when using the standard Friz Quadrata font.
+
 ## [1.9] - 2026-01-28
 ### Fixed
 - **Secret Value Crash:** Resolved a critical Lua error (`attempt to index local 'self' (a secret value)`) caused by Blizzard's internal Diminishing Returns (DR) UI. All `IsForbidden()` checks are now safely wrapped in protected calls (`pcall`).

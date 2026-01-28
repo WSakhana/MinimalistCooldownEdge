@@ -8,6 +8,7 @@ local tempDB = {} -- Temporary buffer for unsaved changes
 
 local fontOptions = {
     ["Fonts\\FRIZQT__.TTF"] = "Friz Quadrata",
+    ["Fonts\\FRIZQT___CYR.TTF"] = "Friz Quadrata (Cyrillic)",
     ["Fonts\\ARIALN.TTF"] = "Arial Narrow",
     ["Fonts\\MORPHEUS.TTF"] = "Morpheus",
     ["Fonts\\skurri.ttf"] = "Skurri",
@@ -200,7 +201,14 @@ function addon.GUI:CreateOptionsPanel()
     -- TITLE UPDATED HERE
     local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", 16, -16)
-    title:SetText("|cff00ff00MinimalistCooldownEdge|r (v1.9)")
+
+    -- Get version dynamically from .toc
+    local version = C_AddOns.GetAddOnMetadata(addonName, "Version")
+    if version then
+        title:SetText("|cff00ff00MinimalistCooldownEdge|r (v" .. version .. ")")
+    else
+        title:SetText("|cff00ff00MinimalistCooldownEdge|r")
+    end
 
     local yOffset = -50 
 
