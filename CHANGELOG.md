@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9] - 2026-01-28
+### Fixed
+- **Secret Value Crash:** Resolved a critical Lua error (`attempt to index local 'self' (a secret value)`) caused by Blizzard's internal Diminishing Returns (DR) UI. All `IsForbidden()` checks are now safely wrapped in protected calls (`pcall`).
+
+### Changed
+- **Blacklist Update:** Added "Party", "Compact", and "Raid" frames to the internal hardcoded blacklist. This ensures that the addon no longer attempts to style Party or Raid frames, while still allowing styling for Player and Target frames.
+
 ## [1.8] - 2026-01-27
 ### Fixed
 - **Glider Compatibility:** Fixed an issue where enabling the "Global" category would incorrectly attach cooldown styles to the **Glider** addon's speedometer.

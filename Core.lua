@@ -8,7 +8,11 @@ _G[addonName] = addon
 -- Add partial or full names of frames/addons to ignore here.
 local hardcodedBlacklist = {
     "Glider",
-    -- "RipWeakAuras", -- Example: Add this if you wanted to ignore WeakAuras
+    "Party",        -- [NEW] Ignore Party Frames
+    "Compact",      -- [NEW] Ignore Blizzard Raid Frames
+    "Raid",         -- [NEW] Ignore General Raid Frames
+    "VuhDo",        -- [NEW] Ignore VuhDo Raid Frames
+    "Grid",         -- [NEW] Ignore Grid Raid Frames
 }
 
 -- === OPTIMIZATION: CATEGORY CACHE ===
