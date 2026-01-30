@@ -2,7 +2,7 @@
 ## Title: MinimalistCooldownEdge
 ## Notes: Clean cooldowns with category-specific styles.
 ## Author: Anahkas
-## Version: 1.9.2
+## Version: 1.9.3
 ## IconTexture: Interface\Cooldown\edge
 ## Category: Action Bars
 ## SavedVariables: MinimalistCooldownEdgeDB

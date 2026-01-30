@@ -170,11 +170,21 @@ end
 function addon:ForceUpdateAll()
     local frame = EnumerateFrames()
     while frame do
-        if frame.IsForbidden and not frame:IsForbidden() then
+        -- [FIX] Wrapped in pcall to safely check IsForbidden on all frames
+        local safe, isForbidden = pcall(function() return frame:IsForbidden() end)
+        
+        if safe and not isForbidden then
             if frame:IsObjectType("Cooldown") then
                 addon:ApplyCustomStyle(frame)
-            elseif frame.cooldown and frame.cooldown.IsForbidden and not frame.cooldown:IsForbidden() then
-                addon:ApplyCustomStyle(frame.cooldown)
+            
+            -- [FIX] Added type(frame.cooldown) == "table" check below
+            -- This prevents crashing on addons that set frame.cooldown = 0 or similar numbers
+            elseif frame.cooldown and type(frame.cooldown) == "table" then
+                
+                local safeCD, isForbiddenCD = pcall(function() return frame.cooldown:IsForbidden() end)
+                if safeCD and not isForbiddenCD then
+                    addon:ApplyCustomStyle(frame.cooldown)
+                end
             end
         end
         frame = EnumerateFrames(frame)

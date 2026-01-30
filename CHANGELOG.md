@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.9.3] - 2026-01-30
+### Fixed
+- **Crash Fix (Type Safety):** Resolved a Lua error (`attempt to index field 'cooldown' (a number value)`) that occurred when other addons (such as *PeralexBGFontEnforcer*) stored numeric data in the `.cooldown` key instead of a frame object. The addon now strictly verifies that `.cooldown` is a table before attempting to style it.
+
 ## [1.9.2] - 2026-01-28
 ### Added
 - **Cyrillic Font Support:** Added "Friz Quadrata (Cyrillic)" to the font selection dropdown in the Options panel. This ensures correct character rendering for Russian clients and other Cyrillic users who previously saw question marks (`????`) when using the standard Friz Quadrata font.
