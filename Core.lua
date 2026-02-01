@@ -1,51 +1,70 @@
--- Core.lua - Main functionality and Detection Logic
+-- Core.lua - Main functionality using Ace3
 
+-- Initialize AceAddon
 local addonName, addon = ...
-addon = addon or {}
-_G[addonName] = addon
+local MCE = LibStub("AceAddon-3.0"):NewAddon(addon, "MinimalistCooldownEdge", "AceConsole-3.0", "AceEvent-3.0", "AceHook-3.0")
 
 -- === HARDCODED BLACKLIST ===
-local hardcodedBlacklist = {
-    "Glider",
-    "Party",        -- Ignore Party Frames
-    "Compact",      -- Ignore Blizzard Raid Frames
-    "Raid",         -- Ignore General Raid Frames
-    "VuhDo",        -- Ignore VuhDo Raid Frames
-    "Grid",         -- Ignore Grid Raid Frames
-}
+local hardcodedBlacklist = { "Glider", "Party", "Compact", "Raid", "VuhDo", "Grid" }
 
 -- === OPTIMIZATION: CATEGORY CACHE ===
 local categoryCache = setmetatable({}, { __mode = "k" })
 
--- === DETECTION LOGIC ===
-local function GetCooldownCategory(cooldownFrame)
-    -- 1. CACHE CHECK: If we already know this frame, return immediately (O(1))
-    if categoryCache[cooldownFrame] then
-        return categoryCache[cooldownFrame]
+-- === ACE ADDON LIFECYCLE ===
+function MCE:OnInitialize()
+    -- [FIX] Use the NEW database name "MinimalistCooldownEdgeDB_v2"
+    -- This ignores the old V1 database on users' PCs and creates a fresh V2 structure.
+    self.db = LibStub("AceDB-3.0"):New("MinimalistCooldownEdgeDB_v2", self.defaults, true)
+
+    -- Register Options Table
+    LibStub("AceConfig-3.0"):RegisterOptionsTable("MinimalistCooldownEdge", self.GetOptions)
+    self.optionsFrame = LibStub("AceConfigDialog-3.0"):AddToBlizOptions("MinimalistCooldownEdge", "MinimalistCooldownEdge")
+
+    -- Register Chat Command
+    self:RegisterChatCommand("mce", "SlashCommand")
+    self:RegisterChatCommand("minimalistcooldownedge", "SlashCommand")
+end
+
+function MCE:OnEnable()
+    self:SetupHooks()
+    -- Delay initial update slightly to ensure UI is loaded
+    C_Timer.After(2, function() self:ForceUpdateAll() end)
+end
+
+function MCE:SlashCommand(input)
+    if InCombatLockdown() then
+        self:Print("Cannot open options in combat.")
+        return
     end
+    LibStub("AceConfigDialog-3.0"):Open("MinimalistCooldownEdge")
+end
+
+-- === DETECTION LOGIC ===
+function MCE:GetCooldownCategory(cooldownFrame)
+    if categoryCache[cooldownFrame] then return categoryCache[cooldownFrame] end
 
     local current = cooldownFrame:GetParent()
     local depth = 0
     
+    -- SAFELY retrieve scanDepth, defaulting to 10 if DB isn't ready
     local maxDepth = 10
-    if addon.Config then
-        maxDepth = addon.Config:Get("scanDepth", "global") or 10
+    if self.db and self.db.profile then 
+        maxDepth = self.db.profile.scanDepth 
     end
-    
-    -- CPU OPTIMIZATION: Fast Check for Standard Buttons
+
+    -- CPU OPTIMIZATION: Fast Check
     local parentName = current and current:GetName() or ""
     if string.find(parentName, "BuffButton") or string.find(parentName, "DebuffButton") or string.find(parentName, "TempEnchant") then
         categoryCache[cooldownFrame] = "global" 
         return "global" 
     end
     
-    local result = "global" -- Default fallback
+    local result = "global" 
 
     while current and current ~= UIParent and depth < maxDepth do
         local name = current:GetName() or ""
         local objType = current:GetObjectType()
         
-        -- 0. BLACKLIST CHECK
         for _, blockedKey in ipairs(hardcodedBlacklist) do
             if string.find(name, blockedKey) then
                 categoryCache[cooldownFrame] = "blacklist"
@@ -53,41 +72,16 @@ local function GetCooldownCategory(cooldownFrame)
             end
         end
 
-        -- 1. NAMEPLATES
-        if objType == "NamePlate" 
-           or string.find(name, "NamePlate") 
-           or string.find(name, "Plater") 
-           or string.find(name, "Kui") 
-           or (current.unit and string.find(current.unit, "nameplate")) then
-            result = "nameplate"
-            break
+        if objType == "NamePlate" or string.find(name, "NamePlate") or string.find(name, "Plater") or string.find(name, "Kui") or (current.unit and string.find(current.unit, "nameplate")) then
+            result = "nameplate"; break
         end
         
-        -- 2. UNIT FRAMES
-        if string.find(name, "PlayerFrame") 
-           or string.find(name, "TargetFrame") 
-           or string.find(name, "FocusFrame") 
-           or string.find(name, "Party") 
-           or string.find(name, "CompactUnit") 
-           or string.find(name, "ElvUF") 
-           or string.find(name, "VuhDo") 
-           or string.find(name, "SUF") 
-           or string.find(name, "Grid") then
-            result = "unitframe"
-            break
+        if string.find(name, "PlayerFrame") or string.find(name, "TargetFrame") or string.find(name, "FocusFrame") or string.find(name, "ElvUF") or string.find(name, "SUF") then
+            result = "unitframe"; break
         end
         
-        -- 3. ACTION BARS
-        if (current.action and type(current.action) == "number") 
-           or (current.GetAttribute and current:GetAttribute("type")) 
-           or string.find(name, "Action") 
-           or string.find(name, "MultiBar") 
-           or string.find(name, "BT4") 
-           or string.find(name, "Dominos") then
-             if not string.find(name, "Aura") then
-                result = "actionbar"
-                break
-             end
+        if (current.action and type(current.action) == "number") or (current.GetAttribute and current:GetAttribute("type")) or string.find(name, "Action") or string.find(name, "MultiBar") or string.find(name, "BT4") or string.find(name, "Dominos") then
+             if not string.find(name, "Aura") then result = "actionbar"; break end
         end
         
         current = current:GetParent()
@@ -99,122 +93,91 @@ local function GetCooldownCategory(cooldownFrame)
 end
 
 -- === STACK COUNT STYLING ===
-local function StyleStackCount(cooldownFrame, config, category)
-    -- [RESTORED] Only apply to Action Bars to prevent crashes on other frames
-    if category ~= "actionbar" or not config:Get("stackEnabled", category) then return end
+function MCE:StyleStackCount(cooldownFrame, config, category)
+    if category ~= "actionbar" or not config.stackEnabled then return end
 
     local parent = cooldownFrame:GetParent()
     if not parent then return end
-
-    -- [SAFETY] Check name to avoid nil concatenation errors
     local parentName = parent.GetName and parent:GetName()
-
-    -- Try to find the Count region
     local countRegion = parent.Count or (parentName and _G[parentName.."Count"])
 
     if countRegion and countRegion.GetObjectType and countRegion:GetObjectType() == "FontString" then
         local safe, isForbidden = pcall(function() return countRegion:IsForbidden() end)
         if safe and not isForbidden then
-            
-            local font = config:Get("stackFont", category)
-            local size = config:Get("stackSize", category)
-            local style = config:Get("stackStyle", category)
-            local color = config:Get("stackColor", category)
-            
-            local anchor = config:Get("stackAnchor", category) or "BOTTOMRIGHT"
-            local x = config:Get("stackOffsetX", category) or 0
-            local y = config:Get("stackOffsetY", category) or 0
-
-            -- Apply Font & Style
-            countRegion:SetFont(font, size, style)
-            
-            -- Apply Color
-            if color then
-                countRegion:SetTextColor(color.r, color.g, color.b, color.a)
-            end
-
-            -- Apply Position
+            countRegion:SetFont(config.stackFont, config.stackSize, config.stackStyle)
+            countRegion:SetTextColor(config.stackColor.r, config.stackColor.g, config.stackColor.b, config.stackColor.a)
             countRegion:ClearAllPoints()
-            countRegion:SetPoint(anchor, parent, anchor, x, y)
-            
-            -- Ensure visibility over swipe
-            if countRegion.GetDrawLayer then
-                countRegion:SetDrawLayer("OVERLAY", 7) 
-            end
+            countRegion:SetPoint(config.stackAnchor, parent, config.stackAnchor, config.stackOffsetX, config.stackOffsetY)
+            if countRegion.GetDrawLayer then countRegion:SetDrawLayer("OVERLAY", 7) end
         end
     end
 end
 
 -- === STYLE APPLICATION ===
-function addon:ApplyCustomStyle(self)
-    local safe, isForbidden = pcall(function() return not self or self:IsForbidden() end)
+function MCE:ApplyCustomStyle(self_frame)
+    local safe, isForbidden = pcall(function() return not self_frame or self_frame:IsForbidden() end)
     if not safe or isForbidden then return end
 
-    local config = addon.Config
-    if not config then return end
-    
-    local category = GetCooldownCategory(self)
+    -- [CRITICAL FIX] GUARD CLAUSE
+    -- If the database or profile hasn't initialized yet, STOP here.
+    -- This prevents the "attempt to index field 'categories' (a nil value)" crash.
+    if not self.db or not self.db.profile or not self.db.profile.categories then
+        return
+    end
 
+    local category = self:GetCooldownCategory(self_frame)
     if category == "blacklist" then return end
+
+    -- Retrieve settings from AceDB
+    local config = self.db.profile.categories[category]
     
-    local isEnabled = config:Get("enabled", category)
-    if not isEnabled then
-        if self.SetDrawEdge then pcall(function() self:SetDrawEdge(false) end) end
+    -- [SAFETY] Ensure config exists for this category before proceeding
+    if not config or not config.enabled then
+        if self_frame.SetDrawEdge then pcall(function() self_frame:SetDrawEdge(false) end) end
         return 
     end
     
-    -- [RESTORED] Apply Stack Count Styles (Action Bar Only inside the function)
-    StyleStackCount(self, config, category)
+    self:StyleStackCount(self_frame, config, category)
 
-    local edgeEnabled = config:Get("edgeEnabled", category)
-    local edgeScale = config:Get("edgeScale", category)
-    local hideCountdown = config:Get("hideCountdownNumbers", category)
-    
-    if self.SetDrawEdge then
+    if self_frame.SetDrawEdge then
         pcall(function()
-            if edgeEnabled then
-                self:SetDrawEdge(true)
-                self:SetEdgeScale(edgeScale)
+            if config.edgeEnabled then
+                self_frame:SetDrawEdge(true)
+                self_frame:SetEdgeScale(config.edgeScale)
             else
-                self:SetDrawEdge(false)
+                self_frame:SetDrawEdge(false)
             end
         end)
     end
     
-    if self.SetHideCountdownNumbers then
-        pcall(function() self:SetHideCountdownNumbers(hideCountdown) end)
+    if self_frame.SetHideCountdownNumbers then
+        pcall(function() self_frame:SetHideCountdownNumbers(config.hideCountdownNumbers) end)
     end
     
-    if self.GetRegions then
-        local font = config:Get("font", category)
-        local fontSize = config:Get("fontSize", category)
-        local fontStyle = config:Get("fontStyle", category)
-        local textColor = config:Get("textColor", category)
-
-        local regions = {self:GetRegions()}
+    if self_frame.GetRegions then
+        local regions = {self_frame:GetRegions()}
         for _, region in ipairs(regions) do
             if region:GetObjectType() == "FontString" and not region:IsForbidden() then
-                region:SetFont(font, fontSize, fontStyle)
-                if textColor then
-                    region:SetTextColor(textColor.r, textColor.g, textColor.b, textColor.a)
+                region:SetFont(config.font, config.fontSize, config.fontStyle)
+                if config.textColor then
+                    region:SetTextColor(config.textColor.r, config.textColor.g, config.textColor.b, config.textColor.a)
                 end
             end
         end
     end
 end
 
-function addon:ForceUpdateAll()
+function MCE:ForceUpdateAll()
     local frame = EnumerateFrames()
     while frame do
         local safe, isForbidden = pcall(function() return frame:IsForbidden() end)
-        
         if safe and not isForbidden then
             if frame:IsObjectType("Cooldown") then
-                addon:ApplyCustomStyle(frame)
+                self:ApplyCustomStyle(frame)
             elseif frame.cooldown and type(frame.cooldown) == "table" then
                 local safeCD, isForbiddenCD = pcall(function() return frame.cooldown:IsForbidden() end)
                 if safeCD and not isForbiddenCD then
-                    addon:ApplyCustomStyle(frame.cooldown)
+                    self:ApplyCustomStyle(frame.cooldown)
                 end
             end
         end
@@ -222,26 +185,14 @@ function addon:ForceUpdateAll()
     end
 end
 
-local function SetupHooks()
-    hooksecurefunc("CooldownFrame_Set", function(self)
-        local safe, isForbidden = pcall(function() return self:IsForbidden() end)
-        if safe and not isForbidden then
-            C_Timer.After(0, function()
-                local safeT, isForbiddenT = pcall(function() return self:IsForbidden() end)
-                if safeT and not isForbiddenT then addon:ApplyCustomStyle(self) end
-            end)
-        end
+function MCE:SetupHooks()
+    hooksecurefunc("CooldownFrame_Set", function(f)
+        C_Timer.After(0, function() MCE:ApplyCustomStyle(f) end)
     end)
     
     if CooldownFrame_SetTimer then 
-         hooksecurefunc("CooldownFrame_SetTimer", function(self)
-            local safe, isForbidden = pcall(function() return self:IsForbidden() end)
-            if safe and not isForbidden then
-                C_Timer.After(0, function()
-                    local safeT, isForbiddenT = pcall(function() return self:IsForbidden() end)
-                    if safeT and not isForbiddenT then addon:ApplyCustomStyle(self) end
-                end)
-            end
+         hooksecurefunc("CooldownFrame_SetTimer", function(f)
+            C_Timer.After(0, function() MCE:ApplyCustomStyle(f) end)
         end)
     end
 
@@ -250,22 +201,9 @@ local function SetupHooks()
         if LAB then
             LAB:RegisterCallback("OnButtonUpdate", function(_, button)
                 C_Timer.After(0, function()
-                    if button and button.cooldown then addon:ApplyCustomStyle(button.cooldown) end
+                    if button and button.cooldown then MCE:ApplyCustomStyle(button.cooldown) end
                 end)
             end)
         end
     end
 end
-
-local eventFrame = CreateFrame("Frame")
-eventFrame:RegisterEvent("ADDON_LOADED")
-eventFrame:RegisterEvent("PLAYER_LOGIN")
-eventFrame:SetScript("OnEvent", function(self, event, loadedAddon)
-    if event == "ADDON_LOADED" and loadedAddon == addonName then
-        if addon.Config then addon.Config:Initialize() end
-        self:UnregisterEvent("ADDON_LOADED")
-    elseif event == "PLAYER_LOGIN" then
-        SetupHooks()
-        C_Timer.After(2, function() addon:ForceUpdateAll() end)
-    end
-end)

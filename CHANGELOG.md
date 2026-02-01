@@ -1,5 +1,16 @@
 # Changelog
 
+# [2.1.0] - 2026-02-01
+### Changed
+- **Major Framework Overhaul (Ace3):** The addon has been completely refactored to use standard Ace3 libraries (AceAddon, AceConfig, AceDB). This ensures better long-term stability and compatibility with other addons.
+- **Database Migration:** Switched SavedVariables to MinimalistCooldownEdgeDB_v2.
+- **Note:** This update will reset your settings to default. This was necessary to switch to the new profile system without causing crashes. Your old settings file is safely ignored.
+- **Options Menu:** The /mce command now opens a standardized configuration panel inside the Blizzard Interface Options, rather than a custom standalone window.
+
+### Fixed
+- **Startup Crash:** Resolved a critical race condition (attempt to index field 'categories') where other addons (like sArena) triggered cooldown updates before the database was fully loaded.
+- **Load Order:** Fixed Lua errors caused by the Options module trying to attach settings before the Core addon was initialized.
+
 ## [2.0.0] - 2026-02-01
 ### Added
 - **Stack Count Customization (Action Bars):** Added a dedicated section in the Options Panel to customize the "Charges" counter (e.g., for spells like Conflagrate or Shield Block).
