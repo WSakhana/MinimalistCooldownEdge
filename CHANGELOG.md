@@ -8,6 +8,7 @@
 
 ### Added
 - **Slash Command:** Added `/minice` as a valid command to open the options panel (alongside `/mce` and `/minimalistcooldownedge`).
+- **Options UI:** Added the addon logo.
 
 # [2.1] - 2026-02-01
 ### Added
