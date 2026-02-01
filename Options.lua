@@ -369,9 +369,9 @@ function MCE:GetOptions()
                 }
             },
             actionbar = CreateCategoryOptions(2, "Action Bars", "actionbar"),
-            global    = CreateCategoryOptions(3, "Global Items", "global"),
-            nameplate = CreateCategoryOptions(4, "Nameplates", "nameplate"),
-            unitframe = CreateCategoryOptions(5, "Unit Frames", "unitframe"),
+            nameplate = CreateCategoryOptions(3, "Nameplates", "nameplate"),
+            unitframe = CreateCategoryOptions(4, "Unit Frames", "unitframe"),
+            global    = CreateCategoryOptions(5, "CD Manager & Others", "global"),
             
             profiles = LibStub("AceDBOptions-3.0"):GetOptionsTable(MCE.db),
         }
