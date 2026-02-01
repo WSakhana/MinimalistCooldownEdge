@@ -1,5 +1,14 @@
 # Changelog
 
+# [2.2] - 2026-02-01
+### Changed
+- **Rebranding:** The addon is now officially named **MiniCE**! The display name in the Addon List and Options Panel has been updated to reflect this change.
+  - *Note:* The internal folder name remains `MinimalistCooldownEdge` to ensure all your existing settings and profiles are **preserved**. You do not need to reset anything.
+- **Visuals:** Updated the TOC title with the new name and color branding (`|cff00ccffMiniCE|r`).
+
+### Added
+- **Slash Command:** Added `/minice` as a valid command to open the options panel (alongside `/mce` and `/minimalistcooldownedge`).
+
 # [2.1] - 2026-02-01
 ### Added
 - **Maintenance Tools:** Added a **"Reset Category"** button at the bottom of each tab to easily restore default settings for that specific group.

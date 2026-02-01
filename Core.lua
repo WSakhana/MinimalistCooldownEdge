@@ -22,6 +22,7 @@ function MCE:OnInitialize()
 
     -- Register Chat Command
     self:RegisterChatCommand("mce", "SlashCommand")
+    self:RegisterChatCommand("minice", "SlashCommand") -- La nouvelle
     self:RegisterChatCommand("minimalistcooldownedge", "SlashCommand")
 end
 

@@ -261,7 +261,7 @@ end
 function MCE:GetOptions()
     return {
         type = "group",
-        name = "MinimalistCooldownEdge",
+        name = "MiniCE",
         args = {
             general = {
                 type = "group",
@@ -272,7 +272,7 @@ function MCE:GetOptions()
                     headerInfo = {
                         type = "description",
                         name = "|cff00ccff" .. addonName .. "|r |cffffd100v" .. addonVersion .. "|r\n\n" ..
-                               "Thank you for using MCE! If you enjoy this addon, please leave a comment or report issues on CurseForge/GitHub.",
+                               "Thank you for using MiniCE! If you enjoy this addon, please leave a comment or report issues on CurseForge/GitHub.",
                         fontSize = "medium",
                         order = 1,
                     },

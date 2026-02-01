@@ -1,8 +1,8 @@
 ## Interface: 120001, 120000
-## Title: MinimalistCooldownEdge
+## Title: |cff00ccffMiniCE|r (MinimalistCooldownEdge)
 ## Notes: Clean cooldowns with category-specific styles.
 ## Author: Anahkas
-## Version: 2.1
+## Version: 2.2
 ## IconTexture: Interface\Cooldown\edge
 ## Category: Action Bars
 ## SavedVariables: MinimalistCooldownEdgeDB_v2
