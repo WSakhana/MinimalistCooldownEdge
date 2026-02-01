@@ -5,18 +5,16 @@ addon = addon or {}
 _G[addonName] = addon
 
 -- === HARDCODED BLACKLIST ===
--- Add partial or full names of frames/addons to ignore here.
 local hardcodedBlacklist = {
     "Glider",
-    "Party",        -- [NEW] Ignore Party Frames
-    "Compact",      -- [NEW] Ignore Blizzard Raid Frames
-    "Raid",         -- [NEW] Ignore General Raid Frames
-    "VuhDo",        -- [NEW] Ignore VuhDo Raid Frames
-    "Grid",         -- [NEW] Ignore Grid Raid Frames
+    "Party",        -- Ignore Party Frames
+    "Compact",      -- Ignore Blizzard Raid Frames
+    "Raid",         -- Ignore General Raid Frames
+    "VuhDo",        -- Ignore VuhDo Raid Frames
+    "Grid",         -- Ignore Grid Raid Frames
 }
 
 -- === OPTIMIZATION: CATEGORY CACHE ===
--- Weak keys allow the Garbage Collector to clean up frames that no longer exist
 local categoryCache = setmetatable({}, { __mode = "k" })
 
 -- === DETECTION LOGIC ===
@@ -29,7 +27,6 @@ local function GetCooldownCategory(cooldownFrame)
     local current = cooldownFrame:GetParent()
     local depth = 0
     
-    -- Retrieve max depth from Global config (default to 10 if not ready)
     local maxDepth = 10
     if addon.Config then
         maxDepth = addon.Config:Get("scanDepth", "global") or 10
@@ -38,7 +35,7 @@ local function GetCooldownCategory(cooldownFrame)
     -- CPU OPTIMIZATION: Fast Check for Standard Buttons
     local parentName = current and current:GetName() or ""
     if string.find(parentName, "BuffButton") or string.find(parentName, "DebuffButton") or string.find(parentName, "TempEnchant") then
-        categoryCache[cooldownFrame] = "global" -- Store in cache
+        categoryCache[cooldownFrame] = "global" 
         return "global" 
     end
     
@@ -48,7 +45,7 @@ local function GetCooldownCategory(cooldownFrame)
         local name = current:GetName() or ""
         local objType = current:GetObjectType()
         
-        -- 0. BLACKLIST CHECK (New Priority)
+        -- 0. BLACKLIST CHECK
         for _, blockedKey in ipairs(hardcodedBlacklist) do
             if string.find(name, blockedKey) then
                 categoryCache[cooldownFrame] = "blacklist"
@@ -97,14 +94,59 @@ local function GetCooldownCategory(cooldownFrame)
         depth = depth + 1
     end
 
-    -- Save result to cache before returning
     categoryCache[cooldownFrame] = result
     return result
 end
 
+-- === STACK COUNT STYLING ===
+local function StyleStackCount(cooldownFrame, config, category)
+    -- [RESTORED] Only apply to Action Bars to prevent crashes on other frames
+    if category ~= "actionbar" or not config:Get("stackEnabled", category) then return end
+
+    local parent = cooldownFrame:GetParent()
+    if not parent then return end
+
+    -- [SAFETY] Check name to avoid nil concatenation errors
+    local parentName = parent.GetName and parent:GetName()
+
+    -- Try to find the Count region
+    local countRegion = parent.Count or (parentName and _G[parentName.."Count"])
+
+    if countRegion and countRegion.GetObjectType and countRegion:GetObjectType() == "FontString" then
+        local safe, isForbidden = pcall(function() return countRegion:IsForbidden() end)
+        if safe and not isForbidden then
+            
+            local font = config:Get("stackFont", category)
+            local size = config:Get("stackSize", category)
+            local style = config:Get("stackStyle", category)
+            local color = config:Get("stackColor", category)
+            
+            local anchor = config:Get("stackAnchor", category) or "BOTTOMRIGHT"
+            local x = config:Get("stackOffsetX", category) or 0
+            local y = config:Get("stackOffsetY", category) or 0
+
+            -- Apply Font & Style
+            countRegion:SetFont(font, size, style)
+            
+            -- Apply Color
+            if color then
+                countRegion:SetTextColor(color.r, color.g, color.b, color.a)
+            end
+
+            -- Apply Position
+            countRegion:ClearAllPoints()
+            countRegion:SetPoint(anchor, parent, anchor, x, y)
+            
+            -- Ensure visibility over swipe
+            if countRegion.GetDrawLayer then
+                countRegion:SetDrawLayer("OVERLAY", 7) 
+            end
+        end
+    end
+end
+
 -- === STYLE APPLICATION ===
 function addon:ApplyCustomStyle(self)
-    -- [FIX] Wrapped in pcall to prevent crashes on Secret/Protected frames
     local safe, isForbidden = pcall(function() return not self or self:IsForbidden() end)
     if not safe or isForbidden then return end
 
@@ -113,23 +155,17 @@ function addon:ApplyCustomStyle(self)
     
     local category = GetCooldownCategory(self)
 
-    -- [NEW] BLACKLIST CHECK
-    if category == "blacklist" then
-        return -- Do absolutely nothing for blacklisted frames
-    end
+    if category == "blacklist" then return end
     
-    -- [NEW] GATEKEEPER: Check if category is enabled
     local isEnabled = config:Get("enabled", category)
-    
     if not isEnabled then
-        -- If disabled, ensure we clean up the edge and exit
-        if self.SetDrawEdge then 
-            pcall(function() self:SetDrawEdge(false) end) 
-        end
+        if self.SetDrawEdge then pcall(function() self:SetDrawEdge(false) end) end
         return 
     end
     
-    -- Logic below only runs if Category is ENABLED
+    -- [RESTORED] Apply Stack Count Styles (Action Bar Only inside the function)
+    StyleStackCount(self, config, category)
+
     local edgeEnabled = config:Get("edgeEnabled", category)
     local edgeScale = config:Get("edgeScale", category)
     local hideCountdown = config:Get("hideCountdownNumbers", category)
@@ -170,17 +206,12 @@ end
 function addon:ForceUpdateAll()
     local frame = EnumerateFrames()
     while frame do
-        -- [FIX] Wrapped in pcall to safely check IsForbidden on all frames
         local safe, isForbidden = pcall(function() return frame:IsForbidden() end)
         
         if safe and not isForbidden then
             if frame:IsObjectType("Cooldown") then
                 addon:ApplyCustomStyle(frame)
-            
-            -- [FIX] Added type(frame.cooldown) == "table" check below
-            -- This prevents crashing on addons that set frame.cooldown = 0 or similar numbers
             elseif frame.cooldown and type(frame.cooldown) == "table" then
-                
                 local safeCD, isForbiddenCD = pcall(function() return frame.cooldown:IsForbidden() end)
                 if safeCD and not isForbiddenCD then
                     addon:ApplyCustomStyle(frame.cooldown)
@@ -193,29 +224,22 @@ end
 
 local function SetupHooks()
     hooksecurefunc("CooldownFrame_Set", function(self)
-        -- [FIX] Use pcall to check for forbidden status without crashing on secret frames
         local safe, isForbidden = pcall(function() return self:IsForbidden() end)
         if safe and not isForbidden then
             C_Timer.After(0, function()
-                -- Check again inside timer (frame might have become forbidden or nil)
                 local safeT, isForbiddenT = pcall(function() return self:IsForbidden() end)
-                if safeT and not isForbiddenT then 
-                    addon:ApplyCustomStyle(self) 
-                end
+                if safeT and not isForbiddenT then addon:ApplyCustomStyle(self) end
             end)
         end
     end)
     
     if CooldownFrame_SetTimer then 
          hooksecurefunc("CooldownFrame_SetTimer", function(self)
-            -- [FIX] Applied same safety logic here
             local safe, isForbidden = pcall(function() return self:IsForbidden() end)
             if safe and not isForbidden then
                 C_Timer.After(0, function()
                     local safeT, isForbiddenT = pcall(function() return self:IsForbidden() end)
-                    if safeT and not isForbiddenT then 
-                        addon:ApplyCustomStyle(self) 
-                    end
+                    if safeT and not isForbiddenT then addon:ApplyCustomStyle(self) end
                 end)
             end
         end)

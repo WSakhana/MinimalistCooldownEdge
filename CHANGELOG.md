@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0] - 2026-02-01
+### Added
+- **Stack Count Customization (Action Bars):** Added a dedicated section in the Options Panel to customize the "Charges" counter (e.g., for spells like Conflagrate or Shield Block).
+  - **Visuals:** You can now change the Font, Size, Outline Style, and Color of the stack number.
+  - **Positioning:** Full control over Anchor Points (e.g., BottomRight, Center) and X/Y Offsets.
+  - **Layering:** Forces the stack count to render on the `OVERLAY` layer to ensure it stays visible on top of the cooldown swipe animation.
+
+### Fixed
+- **Crash Fix (Nil Concatenation):** Resolved a Lua error that occurred when attempting to style frames without a global name. The addon now safely checks `parent:GetName()` before attempting to find the Count region.
+- **Stability:** Restricted Stack Count logic strictly to the "Action Bar" category to prevent conflicts and crashes with Nameplates or UnitFrames that have different structures.
+
 ## [1.9.3] - 2026-01-30
 ### Fixed
 - **Crash Fix (Type Safety):** Resolved a Lua error (`attempt to index field 'cooldown' (a number value)`) that occurred when other addons (such as *PeralexBGFontEnforcer*) stored numeric data in the `.cooldown` key instead of a frame object. The addon now strictly verifies that `.cooldown` is a table before attempting to style it.

@@ -175,6 +175,43 @@ local function UpdateGUIValues()
     uiElements.edgeScaleSlider:SetValue(scale)
     if uiElements.edgeScaleSlider.ValText then uiElements.edgeScaleSlider.ValText:SetText(string.format("%.1f", scale)) end
 
+    -- === STACK CONTROLS VISIBILITY ===
+    -- [RESTORED] Only visible for Action Bars
+    if currentCategory == "actionbar" then
+        uiElements.stackHeader:Show()
+        uiElements.stackCheckbox:Show()
+        uiElements.stackCheckbox:SetChecked(GetTemp("stackEnabled"))
+        
+        uiElements.stackFontDropdown:Show()
+        UIDropDownMenu_SetText(uiElements.stackFontDropdown, fontOptions[GetTemp("stackFont")] or "Custom")
+
+        local sc = GetTemp("stackColor") or {r=1, g=1, b=1, a=1}
+        uiElements.stackColorTexture:SetColorTexture(sc.r, sc.g, sc.b, sc.a)
+        uiElements.stackColorTexture:GetParent():Show()
+        
+        uiElements.stackSizeSlider:Show()
+        uiElements.stackSizeSlider:SetValue(GetTemp("stackSize") or 14)
+        if uiElements.stackSizeSlider.ValText then uiElements.stackSizeSlider.ValText:SetText(GetTemp("stackSize") or 14) end
+
+        uiElements.stackXSlider:Show()
+        uiElements.stackXSlider:SetValue(GetTemp("stackOffsetX") or 0)
+        
+        uiElements.stackYSlider:Show()
+        uiElements.stackYSlider:SetValue(GetTemp("stackOffsetY") or 0)
+
+        uiElements.stackAnchorDropdown:Show()
+        UIDropDownMenu_SetText(uiElements.stackAnchorDropdown, GetTemp("stackAnchor") or "BOTTOMRIGHT")
+    else
+        uiElements.stackHeader:Hide()
+        uiElements.stackCheckbox:Hide()
+        uiElements.stackFontDropdown:Hide()
+        uiElements.stackColorTexture:GetParent():Hide()
+        uiElements.stackSizeSlider:Hide()
+        uiElements.stackXSlider:Hide()
+        uiElements.stackYSlider:Hide()
+        uiElements.stackAnchorDropdown:Hide()
+    end
+    
     -- Performance (Visible only if Global)
     if currentCategory == "global" then
         uiElements.globalHeader:Show()
@@ -198,11 +235,9 @@ function addon.GUI:CreateOptionsPanel()
     local panel = CreateFrame("Frame", "MinimalistCooldownEdgeOptions", UIParent)
     panel.name = "MinimalistCooldownEdge"
     
-    -- TITLE UPDATED HERE
     local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", 16, -16)
 
-    -- Get version dynamically from .toc
     local version = C_AddOns.GetAddOnMetadata(addonName, "Version")
     if version then
         title:SetText("|cff00ff00MinimalistCooldownEdge|r (v" .. version .. ")")
@@ -403,10 +438,165 @@ function addon.GUI:CreateOptionsPanel()
         if self.ValText then self.ValText:SetText(string.format("%.1f", value)) end
         SetTemp("edgeScale", value)
     end)
+
+    -- === STACK COUNTS (CHARGES) SECTION ===
+    yOffset = yOffset - 50
     
+    local stackHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    stackHeader:SetPoint("TOPLEFT", 16, yOffset)
+    stackHeader:SetText("Stack Counts (Charges) Settings")
+    uiElements.stackHeader = stackHeader
+
+    yOffset = yOffset - 30
+
+    -- STACK ENABLE
+    local stackCb = CreateFrame("CheckButton", "MCE_StackCheckbox", panel, "UICheckButtonTemplate")
+    stackCb:SetPoint("TOPLEFT", 20, yOffset)
+    uiElements.stackCheckbox = stackCb
+    _G[stackCb:GetName().."Text"]:SetText("Customize Stack Counts")
+    stackCb:SetScript("OnClick", function(self)
+        SetTemp("stackEnabled", self:GetChecked())
+    end)
+
+    yOffset = yOffset - 40
+
+    -- STACK FONT
+    local stackFontLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    stackFontLabel:SetPoint("TOPLEFT", 25, yOffset)
+    stackFontLabel:SetText("Stack Font:")
+
+    local stackFontDropdown = CreateFrame("Frame", "MCE_StackFontDropdown", panel, "UIDropDownMenuTemplate")
+    stackFontDropdown:SetPoint("LEFT", stackFontLabel, "RIGHT", -5, -2)
+    uiElements.stackFontDropdown = stackFontDropdown
+    UIDropDownMenu_SetWidth(stackFontDropdown, 160)
+    UIDropDownMenu_Initialize(stackFontDropdown, function(self, level)
+        local info = UIDropDownMenu_CreateInfo()
+        for path, name in pairs(fontOptions) do
+            info.text = name
+            info.value = path
+            info.func = function()
+                SetTemp("stackFont", path)
+                UIDropDownMenu_SetSelectedValue(stackFontDropdown, path)
+            end
+            info.checked = (GetTemp("stackFont") == path)
+            UIDropDownMenu_AddButton(info)
+        end
+    end)
+
+    -- STACK COLOR
+    local stackColorBtn = CreateFrame("Button", "MCE_StackColorButton", panel)
+    stackColorBtn:SetPoint("LEFT", stackFontDropdown, "RIGHT", 150, 2)
+    stackColorBtn:SetSize(24, 24)
+    stackColorBtn:SetNormalTexture("Interface\\ChatFrame\\ChatFrameColorSwatch")
+    
+    local stackColTex = stackColorBtn:CreateTexture(nil, "OVERLAY")
+    stackColTex:SetPoint("CENTER")
+    stackColTex:SetSize(14, 14)
+    stackColTex:SetColorTexture(1,1,1,1)
+    uiElements.stackColorTexture = stackColTex
+    
+    stackColorBtn:SetScript("OnClick", function()
+        local c = GetTemp("stackColor") or {r=1,g=1,b=1,a=1}
+        local info = {
+            r = c.r, g = c.g, b = c.b, opacity = c.a, hasOpacity = true,
+            swatchFunc = function()
+                local r,g,b = ColorPickerFrame:GetColorRGB()
+                local a = ColorPickerFrame:GetColorAlpha()
+                SetTemp("stackColor", {r=r,g=g,b=b,a=a})
+                stackColTex:SetColorTexture(r,g,b,a)
+            end
+        }
+        ColorPickerFrame:SetupColorPickerAndShow(info)
+    end)
+
+    local stackColorLabel = stackColorBtn:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    stackColorLabel:SetPoint("BOTTOM", stackColorBtn, "TOP", 0, 5)
+    stackColorLabel:SetText("Color")
+
+    yOffset = yOffset - 50
+
+    -- STACK SIZE
+    local stackSizeSlider = CreateFrame("Slider", "MCE_StackSizeSlider", panel, "OptionsSliderTemplate")
+    stackSizeSlider:SetPoint("TOPLEFT", 25, yOffset)
+    uiElements.stackSizeSlider = stackSizeSlider
+    stackSizeSlider:SetMinMaxValues(8, 36)
+    stackSizeSlider:SetValueStep(1)
+    stackSizeSlider:SetObeyStepOnDrag(true)
+    _G[stackSizeSlider:GetName() .. 'Text']:SetText("")
+    CreateValueLabel(stackSizeSlider, "14")
+    
+    local stackSizeLabel = stackSizeSlider:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    stackSizeLabel:SetPoint("BOTTOMLEFT", stackSizeSlider, "TOPLEFT", 0, 4)
+    stackSizeLabel:SetText("Stack Size")
+
+    stackSizeSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value + 0.5)
+        if self.ValText then self.ValText:SetText(value) end
+        SetTemp("stackSize", value)
+    end)
+
+    yOffset = yOffset - 50
+
+    -- STACK X
+    local stackXSlider = CreateFrame("Slider", "MCE_StackXSlider", panel, "OptionsSliderTemplate")
+    stackXSlider:SetPoint("TOPLEFT", 25, yOffset)
+    uiElements.stackXSlider = stackXSlider
+    stackXSlider:SetMinMaxValues(-20, 20)
+    stackXSlider:SetValueStep(1)
+    stackXSlider:SetObeyStepOnDrag(true)
+    _G[stackXSlider:GetName() .. 'Text']:SetText("Offset X")
+    _G[stackXSlider:GetName() .. 'Low']:SetText("-20")
+    _G[stackXSlider:GetName() .. 'High']:SetText("20")
+    CreateValueLabel(stackXSlider, "0")
+    stackXSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value + 0.5)
+        if self.ValText then self.ValText:SetText(value) end
+        SetTemp("stackOffsetX", value)
+    end)
+
+    -- STACK Y
+    local stackYSlider = CreateFrame("Slider", "MCE_StackYSlider", panel, "OptionsSliderTemplate")
+    stackYSlider:SetPoint("LEFT", stackXSlider, "RIGHT", 40, 0)
+    uiElements.stackYSlider = stackYSlider
+    stackYSlider:SetMinMaxValues(-20, 20)
+    stackYSlider:SetValueStep(1)
+    stackYSlider:SetObeyStepOnDrag(true)
+    _G[stackYSlider:GetName() .. 'Text']:SetText("Offset Y")
+    _G[stackYSlider:GetName() .. 'Low']:SetText("-20")
+    _G[stackYSlider:GetName() .. 'High']:SetText("20")
+    CreateValueLabel(stackYSlider, "0")
+    stackYSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value + 0.5)
+        if self.ValText then self.ValText:SetText(value) end
+        SetTemp("stackOffsetY", value)
+    end)
+    
+    -- STACK ANCHOR
+    local anchorDropdown = CreateFrame("Frame", "MCE_StackAnchorDropdown", panel, "UIDropDownMenuTemplate")
+    anchorDropdown:SetPoint("LEFT", stackYSlider, "RIGHT", 40, -2)
+    uiElements.stackAnchorDropdown = anchorDropdown
+    UIDropDownMenu_SetWidth(anchorDropdown, 100)
+    UIDropDownMenu_Initialize(anchorDropdown, function(self, level)
+        local info = UIDropDownMenu_CreateInfo()
+        local anchors = {"BOTTOMRIGHT", "BOTTOMLEFT", "TOPRIGHT", "TOPLEFT", "CENTER", "BOTTOM", "TOP"}
+        for _, a in ipairs(anchors) do
+            info.text = a
+            info.value = a
+            info.func = function()
+                SetTemp("stackAnchor", a)
+                UIDropDownMenu_SetSelectedValue(anchorDropdown, a)
+            end
+            info.checked = (GetTemp("stackAnchor") == a)
+            UIDropDownMenu_AddButton(info)
+        end
+    end)
+    local anchorLabel = anchorDropdown:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    anchorLabel:SetPoint("BOTTOMLEFT", anchorDropdown, "TOPLEFT", 18, 5)
+    anchorLabel:SetText("Anchor Point")
+
+    -- === GLOBAL HEADER (Moved Down) ===
     yOffset = yOffset - 50 
 
-    -- GLOBAL HEADER
     local globalHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     globalHeader:SetPoint("TOPLEFT", 16, yOffset)
     globalHeader:SetText("Global Addon Settings")

@@ -22,6 +22,16 @@ local defaultStyle = {
     edgeScale = 1.0,
     hideCountdownNumbers = false,
     scanDepth = 10, -- Performance setting (Global)
+
+    -- [NEW] Stack Counts (Charges) Configuration
+    stackEnabled = false,
+    stackFont = "Fonts\\FRIZQT__.TTF",
+    stackSize = 14,
+    stackStyle = "OUTLINE",
+    stackColor = { r = 1, g = 1, b = 1, a = 1 },
+    stackAnchor = "BOTTOMRIGHT",
+    stackOffsetX = -2,
+    stackOffsetY = 2,
 }
 
 -- Utility function accessible globally
@@ -51,7 +61,7 @@ function addon.Config:Initialize()
         if not MinimalistCooldownEdgeDB[cat] then
             MinimalistCooldownEdgeDB[cat] = addon.CopyTable(defaultStyle)
             
-            -- [UPDATED] Default State Logic:
+            -- Default State Logic:
             -- Only enable Action Bars by default. Disable everything else.
             if cat == "actionbar" then
                 MinimalistCooldownEdgeDB[cat].enabled = true
