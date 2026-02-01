@@ -1,5 +1,9 @@
 # Changelog
 
+## [2.4.1] - 2026-02-01
+### Changed
+- Adjust category options for improved styling, orders and functionality
+
 ## [2.4.0] - 2026-02-01
 ### Changed
 - Adjust category options for improved styling and functionality
