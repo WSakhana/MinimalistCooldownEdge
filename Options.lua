@@ -1,6 +1,9 @@
 local addonName, addon = ...
 local MCE = LibStub("AceAddon-3.0"):GetAddon("MinimalistCooldownEdge")
 
+-- Retrieve Version dynamically from TOC
+local addonVersion = C_AddOns.GetAddOnMetadata(addonName, "Version") or "Dev"
+
 -- Shared Font Options
 local fontOptions = {
     ["Fonts\\FRIZQT__.TTF"] = "Friz Quadrata",
@@ -12,7 +15,6 @@ local fontOptions = {
 }
 
 -- === DEFAULTS ===
--- We define a template for a single category to reuse code
 local function GetCategoryDefaults(enabled, fontSize)
     return {
         enabled = enabled,
@@ -48,8 +50,12 @@ MCE.defaults = {
 }
 
 -- === OPTIONS BUILDER ===
--- Helper to generate the options table for a specific category
 local function CreateCategoryOptions(order, name, key)
+    -- Helper to hide elements if the category is disabled
+    local function IsDisabled()
+        return not MCE.db.profile.categories[key].enabled
+    end
+
     return {
         type = "group",
         name = name,
@@ -59,13 +65,19 @@ local function CreateCategoryOptions(order, name, key)
                 type = "toggle",
                 name = "Enable Category",
                 order = 1,
+                width = "full",
                 get = function(info) return MCE.db.profile.categories[key].enabled end,
                 set = function(info, val) 
                     MCE.db.profile.categories[key].enabled = val
                     MCE:ForceUpdateAll()
                 end,
             },
-            headerSettings = { type = "header", name = "Font & Style", order = 10 },
+            headerSettings = { 
+                type = "header", 
+                name = "Font & Style", 
+                order = 10,
+                hidden = IsDisabled 
+            },
             font = {
                 type = "select",
                 name = "Font Face",
@@ -73,6 +85,7 @@ local function CreateCategoryOptions(order, name, key)
                 values = fontOptions,
                 get = function(info) return MCE.db.profile.categories[key].font end,
                 set = function(info, val) MCE.db.profile.categories[key].font = val; MCE:ForceUpdateAll() end,
+                hidden = IsDisabled
             },
             fontSize = {
                 type = "range",
@@ -81,6 +94,7 @@ local function CreateCategoryOptions(order, name, key)
                 min = 8, max = 36, step = 1,
                 get = function(info) return MCE.db.profile.categories[key].fontSize end,
                 set = function(info, val) MCE.db.profile.categories[key].fontSize = val; MCE:ForceUpdateAll() end,
+                hidden = IsDisabled
             },
             fontStyle = {
                 type = "select",
@@ -89,6 +103,7 @@ local function CreateCategoryOptions(order, name, key)
                 values = { ["NONE"] = "None", ["OUTLINE"] = "Outline", ["THICKOUTLINE"] = "Thick", ["MONOCHROME"] = "Monochrome" },
                 get = function(info) return MCE.db.profile.categories[key].fontStyle end,
                 set = function(info, val) MCE.db.profile.categories[key].fontStyle = val; MCE:ForceUpdateAll() end,
+                hidden = IsDisabled
             },
             textColor = {
                 type = "color",
@@ -104,29 +119,45 @@ local function CreateCategoryOptions(order, name, key)
                     c.r, c.g, c.b, c.a = r, g, b, a
                     MCE:ForceUpdateAll()
                 end,
+                hidden = IsDisabled
             },
-            headerEdge = { type = "header", name = "Swipe Edge", order = 20 },
+            headerEdge = { 
+                type = "header", 
+                name = "Swipe Edge", 
+                order = 20,
+                hidden = IsDisabled
+            },
             edgeEnabled = {
                 type = "toggle",
                 name = "Enable Edge",
                 order = 21,
                 get = function(info) return MCE.db.profile.categories[key].edgeEnabled end,
                 set = function(info, val) MCE.db.profile.categories[key].edgeEnabled = val; MCE:ForceUpdateAll() end,
+                hidden = IsDisabled
             },
             edgeScale = {
                 type = "range",
                 name = "Edge Scale",
+                desc = "Controls the thickness of the moving swipe edge.",
                 order = 22,
                 min = 0.5, max = 2.0, step = 0.1,
                 get = function(info) return MCE.db.profile.categories[key].edgeScale end,
                 set = function(info, val) MCE.db.profile.categories[key].edgeScale = val; MCE:ForceUpdateAll() end,
+                hidden = IsDisabled
             },
-            -- Include Stack Counts ONLY for Action Bar
+            edgeScaleLegend = {
+                type = "description",
+                name = "|cff999999( < 1.0 = Thin | 1.0 = Default | > 1.0 = Thick )|r",
+                order = 23,
+                fontSize = "small",
+                hidden = IsDisabled
+            },
             stackGroup = (key == "actionbar") and {
                 type = "group",
                 name = "Stack Counts (Charges)",
                 inline = true,
                 order = 30,
+                hidden = IsDisabled,
                 args = {
                     stackEnabled = {
                         type = "toggle",
@@ -197,7 +228,32 @@ local function CreateCategoryOptions(order, name, key)
                         hidden = function() return not MCE.db.profile.categories[key].stackEnabled end,
                     },
                 }
-            } or nil
+            } or nil,
+            
+            -- === RESET CATEGORY BUTTON ===
+            -- Removed "Maintenance" Header
+            -- Added Spacer for padding
+            spacerReset = {
+                type = "description",
+                name = " ",
+                fontSize = "medium",
+                order = 90,
+            },
+            resetCategory = {
+                type = "execute",
+                name = "Reset Category", -- Renamed to "Reset Category"
+                desc = "Reset settings for this category only.",
+                order = 91,
+                width = "full", -- Full width for better look
+                confirm = true,
+                func = function()
+                    -- Deep copy from defaults to avoid reference issues
+                    MCE.db.profile.categories[key] = CopyTable(MCE.defaults.profile.categories[key])
+                    MCE:ForceUpdateAll()
+                    LibStub("AceConfigRegistry-3.0"):NotifyChange("MinimalistCooldownEdge")
+                    print("|cff00ccffMCE:|r " .. name .. " settings reset.")
+                end,
+            },
         }
     }
 end
@@ -209,18 +265,28 @@ function MCE:GetOptions()
         args = {
             general = {
                 type = "group",
-                name = "General & Global",
+                name = "General Settings",
                 order = 1,
                 args = {
-                    info = {
+                    -- Header
+                    headerInfo = {
                         type = "description",
-                        name = "Global settings affect detection and performance.",
+                        name = "|cff00ccff" .. addonName .. "|r |cffffd100v" .. addonVersion .. "|r\n\n" ..
+                               "Thank you for using MCE! If you enjoy this addon, please leave a comment or report issues on CurseForge/GitHub.",
+                        fontSize = "medium",
                         order = 1,
+                    },
+                    -- Spacer 1
+                    spacer1 = {
+                        type = "description",
+                        name = " ",
+                        fontSize = "large",
+                        order = 1.5,
                     },
                     scanDepth = {
                         type = "range",
                         name = "Scan Depth (CPU)",
-                        desc = "How deep the addon searches for parent frames. Higher values (15-20) needed for complex UIs like ElvUI/Plater.",
+                        desc = "Adjust detection depth. See guide below.",
                         min = 1, max = 20, step = 1,
                         order = 2,
                         get = function(info) return MCE.db.profile.scanDepth end,
@@ -229,12 +295,52 @@ function MCE:GetOptions()
                             print("|cff00ff00MCE:|r Global Scan Depth changed. A /reload is recommended.")
                         end,
                     },
-                    globalCategory = CreateCategoryOptions(10, "Global/Items Styles", "global")
+                    -- Spacer 2
+                    spacer2 = {
+                        type = "description",
+                        name = " ",
+                        fontSize = "medium",
+                        order = 2.5,
+                    },
+                    -- Legend
+                    scanDepthLegend = {
+                        type = "description",
+                        name = "Performance Impact:\n" ..
+                               "|cff00ff00• < 10 : Efficient (Blizzard UI)|r\n" ..
+                               "|cfffff569• 10-15 : Moderate (Bartender, Dominos)|r\n" ..
+                               "|cffffa500• > 15 : High CPU (ElvUI, Plater, VuhDo)|r",
+                        order = 3,
+                        fontSize = "medium",
+                    },
+                    -- === RESET GLOBAL BUTTON ===
+                    -- Removed "Maintenance" Header
+                    -- Added Spacer
+                    spacerGlobalReset = {
+                        type = "description",
+                        name = " ",
+                        fontSize = "medium",
+                        order = 90,
+                    },
+                    resetAll = {
+                        type = "execute",
+                        name = "Reset ALL Settings & Reload",
+                        desc = "Resets the entire profile to default values and immediately reloads the UI.",
+                        order = 91,
+                        width = "full", -- [CHANGE] Forces button to take full width
+                        confirm = true,
+                        func = function() 
+                            MCE.db:ResetProfile()
+                            print("|cff00ccffMCE:|r Profile reset. Reloading UI...")
+                            ReloadUI()
+                        end,
+                    },
                 }
             },
             actionbar = CreateCategoryOptions(2, "Action Bars", "actionbar"),
-            nameplate = CreateCategoryOptions(3, "Nameplates", "nameplate"),
-            unitframe = CreateCategoryOptions(4, "Unit Frames", "unitframe"),
+            global    = CreateCategoryOptions(3, "Global & CD Manager", "global"),
+            nameplate = CreateCategoryOptions(4, "Nameplates", "nameplate"),
+            unitframe = CreateCategoryOptions(5, "Unit Frames", "unitframe"),
+            
             profiles = LibStub("AceDBOptions-3.0"):GetOptionsTable(MCE.db),
         }
     }

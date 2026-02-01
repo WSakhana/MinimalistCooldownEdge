@@ -1,17 +1,25 @@
 # Changelog
 
-# [2.1.0] - 2026-02-01
+# [2.1] - 2026-02-01
+### Added
+- **Maintenance Tools:** Added a **"Reset Category"** button at the bottom of each tab to easily restore default settings for that specific group.
+- **Factory Reset:** Added a **"Reset ALL Settings & Reload"** button in the General tab. This resets the entire profile and automatically triggers a UI reload to ensure a clean state.
+- **Visual Legends:** Added color-coded performance guides for "Scan Depth" (Green/Yellow/Orange) and size guides for "Edge Scale" directly in the options panel.
+- **Dynamic Hiding:** Disabling a category (e.g., toggling "Enable Category" off) now instantly hides all its related options to reduce clutter.
+- **Info Header:** Added a welcome section in General Settings displaying the current version dynamically.
+
 ### Changed
 - **Major Framework Overhaul (Ace3):** The addon has been completely refactored to use standard Ace3 libraries (AceAddon, AceConfig, AceDB). This ensures better long-term stability and compatibility with other addons.
-- **Database Migration:** Switched SavedVariables to MinimalistCooldownEdgeDB_v2.
-- **Note:** This update will reset your settings to default. This was necessary to switch to the new profile system without causing crashes. Your old settings file is safely ignored.
-- **Options Menu:** The /mce command now opens a standardized configuration panel inside the Blizzard Interface Options, rather than a custom standalone window.
+- **Database Migration:** Switched SavedVariables to MinimalistCooldownEdgeDB_v2. **Note:** This update will reset your settings to default. Your old settings file is safely ignored.
+- **Menu Reorganization:** The /mce command now opens a standardized configuration panel inside the Blizzard Interface Options.
+- **Global & CD Manager:** The "Global/Items" category has been promoted to a main tab and renamed to **"Global & CD Manager"** for better accessibility.
+- **UX Improvements:** Added spacing (padding) between options for a cleaner, less condensed look. Maintenance buttons are now full-width for better readability.
 
 ### Fixed
 - **Startup Crash:** Resolved a critical race condition (attempt to index field 'categories') where other addons (like sArena) triggered cooldown updates before the database was fully loaded.
 - **Load Order:** Fixed Lua errors caused by the Options module trying to attach settings before the Core addon was initialized.
 
-## [2.0.0] - 2026-02-01
+## [2.0] - 2026-02-01
 ### Added
 - **Stack Count Customization (Action Bars):** Added a dedicated section in the Options Panel to customize the "Charges" counter (e.g., for spells like Conflagrate or Shield Block).
   - **Visuals:** You can now change the Font, Size, Outline Style, and Color of the stack number.
