@@ -24,7 +24,7 @@ local function GetCategoryDefaults(enabled, fontSize)
         fontStyle = "OUTLINE",
         textColor = { r = 1, g = 0.8, b = 0, a = 1 },
         edgeEnabled = true,
-        edgeScale = 1.0,
+        edgeScale = 1.4,
         hideCountdownNumbers = false,
         -- Stack Defaults
         stackEnabled = false,
