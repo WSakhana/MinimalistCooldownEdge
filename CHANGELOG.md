@@ -1,5 +1,9 @@
 # Changelog
 
+## [2.4.0] - 2026-02-01
+### Changed
+- Adjust category options for improved styling and functionality
+
 ## [2.3.1] - 2026-02-01
 ### Added
 - Added the "Expressway" font option.

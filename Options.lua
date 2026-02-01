@@ -50,127 +50,156 @@ MCE.defaults = {
     }
 }
 
+-- === HELPERS ===
+local function IsCatDisabled(key)
+    return not MCE.db.profile.categories[key].enabled
+end
+
 -- === OPTIONS BUILDER ===
 local function CreateCategoryOptions(order, name, key)
-    -- Helper to hide elements if the category is disabled
-    local function IsDisabled()
-        return not MCE.db.profile.categories[key].enabled
-    end
-
     return {
         type = "group",
         name = name,
         order = order,
         args = {
-            enabled = {
-                type = "toggle",
-                name = "Enable Category",
+            -- 1. Main Toggle
+            enableGroup = {
+                type = "group",
+                name = "State",
+                inline = true,
                 order = 1,
-                width = "full",
-                get = function(info) return MCE.db.profile.categories[key].enabled end,
-                set = function(info, val) 
-                    MCE.db.profile.categories[key].enabled = val
-                    MCE:ForceUpdateAll()
-                end,
+                args = {
+                    enabled = {
+                        type = "toggle",
+                        name = "Enable " .. name,
+                        desc = "Toggle styling for this category.",
+                        width = "full",
+                        order = 1,
+                        get = function(info) return MCE.db.profile.categories[key].enabled end,
+                        set = function(info, val) 
+                            MCE.db.profile.categories[key].enabled = val
+                            MCE:ForceUpdateAll()
+                        end,
+                    },
+                },
             },
-            headerSettings = { 
-                type = "header", 
-                name = "Font & Style", 
+
+            -- 2. Typography Group (Inline for visual grouping)
+            typography = {
+                type = "group",
+                name = "Typography (Cooldown Numbers)",
+                inline = true,
                 order = 10,
-                hidden = IsDisabled 
+                disabled = function() return IsCatDisabled(key) end,
+                args = {
+                    font = {
+                        type = "select",
+                        name = "Font Face",
+                        order = 1,
+                        width = 1.5, -- UX: Give font name more space
+                        values = fontOptions,
+                        get = function(info) return MCE.db.profile.categories[key].font end,
+                        set = function(info, val) MCE.db.profile.categories[key].font = val; MCE:ForceUpdateAll() end,
+                    },
+                    fontSize = {
+                        type = "range",
+                        name = "Size",
+                        order = 2,
+                        width = 0.7, -- UX: Compact slider
+                        min = 8, max = 36, step = 1,
+                        get = function(info) return MCE.db.profile.categories[key].fontSize end,
+                        set = function(info, val) MCE.db.profile.categories[key].fontSize = val; MCE:ForceUpdateAll() end,
+                    },
+                    fontStyle = {
+                        type = "select",
+                        name = "Outline",
+                        order = 3,
+                        width = 0.8, -- UX: Compact dropdown
+                        values = { ["NONE"] = "None", ["OUTLINE"] = "Outline", ["THICKOUTLINE"] = "Thick", ["MONOCHROME"] = "Mono" },
+                        get = function(info) return MCE.db.profile.categories[key].fontStyle end,
+                        set = function(info, val) MCE.db.profile.categories[key].fontStyle = val; MCE:ForceUpdateAll() end,
+                    },
+                    textColor = {
+                        type = "color",
+                        name = "Color",
+                        order = 4,
+                        width = "half",
+                        hasAlpha = true,
+                        get = function(info) 
+                            local c = MCE.db.profile.categories[key].textColor
+                            return c.r, c.g, c.b, c.a
+                        end,
+                        set = function(info, r, g, b, a)
+                            local c = MCE.db.profile.categories[key].textColor
+                            c.r, c.g, c.b, c.a = r, g, b, a
+                            MCE:ForceUpdateAll()
+                        end,
+                    },
+                    hideCountdownNumbers = {
+                        type = "toggle",
+                        name = "Hide Numbers",
+                        desc = "Hide the text entirely (useful if you only want the swipe edge or stacks).",
+                        order = 5,
+                        width = "full",
+                        get = function(info) return MCE.db.profile.categories[key].hideCountdownNumbers end,
+                        set = function(info, val) MCE.db.profile.categories[key].hideCountdownNumbers = val; MCE:ForceUpdateAll() end,
+                    },
+                }
             },
-            font = {
-                type = "select",
-                name = "Font Face",
-                order = 11,
-                values = fontOptions,
-                get = function(info) return MCE.db.profile.categories[key].font end,
-                set = function(info, val) MCE.db.profile.categories[key].font = val; MCE:ForceUpdateAll() end,
-                hidden = IsDisabled
-            },
-            fontSize = {
-                type = "range",
-                name = "Font Size",
-                order = 12,
-                min = 8, max = 36, step = 1,
-                get = function(info) return MCE.db.profile.categories[key].fontSize end,
-                set = function(info, val) MCE.db.profile.categories[key].fontSize = val; MCE:ForceUpdateAll() end,
-                hidden = IsDisabled
-            },
-            fontStyle = {
-                type = "select",
-                name = "Outline",
-                order = 13,
-                values = { ["NONE"] = "None", ["OUTLINE"] = "Outline", ["THICKOUTLINE"] = "Thick", ["MONOCHROME"] = "Monochrome" },
-                get = function(info) return MCE.db.profile.categories[key].fontStyle end,
-                set = function(info, val) MCE.db.profile.categories[key].fontStyle = val; MCE:ForceUpdateAll() end,
-                hidden = IsDisabled
-            },
-            textColor = {
-                type = "color",
-                name = "Text Color",
-                order = 14,
-                hasAlpha = true,
-                get = function(info) 
-                    local c = MCE.db.profile.categories[key].textColor
-                    return c.r, c.g, c.b, c.a
-                end,
-                set = function(info, r, g, b, a)
-                    local c = MCE.db.profile.categories[key].textColor
-                    c.r, c.g, c.b, c.a = r, g, b, a
-                    MCE:ForceUpdateAll()
-                end,
-                hidden = IsDisabled
-            },
-            headerEdge = { 
-                type = "header", 
-                name = "Swipe Edge", 
+
+            -- 3. Swipe Edge Group
+            swipeEdge = {
+                type = "group",
+                name = "Swipe Animation",
+                inline = true,
                 order = 20,
-                hidden = IsDisabled
+                disabled = function() return IsCatDisabled(key) end,
+                args = {
+                    edgeEnabled = {
+                        type = "toggle",
+                        name = "Show Swipe Edge",
+                        desc = "Shows the white line indicating cooldown progress.",
+                        order = 1,
+                        width = "normal",
+                        get = function(info) return MCE.db.profile.categories[key].edgeEnabled end,
+                        set = function(info, val) MCE.db.profile.categories[key].edgeEnabled = val; MCE:ForceUpdateAll() end,
+                    },
+                    edgeScale = {
+                        type = "range",
+                        name = "Edge Thickness",
+                        desc = "Scale of the swipe line (1.0 = Default).",
+                        order = 2,
+                        min = 0.5, max = 2.0, step = 0.1,
+                        get = function(info) return MCE.db.profile.categories[key].edgeScale end,
+                        set = function(info, val) MCE.db.profile.categories[key].edgeScale = val; MCE:ForceUpdateAll() end,
+                    },
+                }
             },
-            edgeEnabled = {
-                type = "toggle",
-                name = "Enable Edge",
-                order = 21,
-                get = function(info) return MCE.db.profile.categories[key].edgeEnabled end,
-                set = function(info, val) MCE.db.profile.categories[key].edgeEnabled = val; MCE:ForceUpdateAll() end,
-                hidden = IsDisabled
-            },
-            edgeScale = {
-                type = "range",
-                name = "Edge Scale",
-                desc = "Controls the thickness of the moving swipe edge.",
-                order = 22,
-                min = 0.5, max = 2.0, step = 0.1,
-                get = function(info) return MCE.db.profile.categories[key].edgeScale end,
-                set = function(info, val) MCE.db.profile.categories[key].edgeScale = val; MCE:ForceUpdateAll() end,
-                hidden = IsDisabled
-            },
-            edgeScaleLegend = {
-                type = "description",
-                name = "|cff999999( < 1.0 = Thin | 1.0 = Default | > 1.0 = Thick )|r",
-                order = 23,
-                fontSize = "small",
-                hidden = IsDisabled
-            },
+
+            -- 4. Stack Counts (Conditional)
             stackGroup = (key == "actionbar") and {
                 type = "group",
-                name = "Stack Counts (Charges)",
+                name = "Stack Counters / Charges",
                 inline = true,
                 order = 30,
-                hidden = IsDisabled,
+                disabled = function() return IsCatDisabled(key) end,
                 args = {
                     stackEnabled = {
                         type = "toggle",
                         name = "Customize Stack Text",
+                        desc = "Take control over the charge counter (e.g., 2 stacks of Conflagrate).",
                         order = 1,
+                        width = "full",
                         get = function(info) return MCE.db.profile.categories[key].stackEnabled end,
                         set = function(info, val) MCE.db.profile.categories[key].stackEnabled = val; MCE:ForceUpdateAll() end,
                     },
+                    -- Sub-section: Style
+                    headerStyle = { type = "header", name = "Style", order = 10, hidden = function() return not MCE.db.profile.categories[key].stackEnabled end },
                     stackFont = {
                         type = "select",
-                        name = "Stack Font",
-                        order = 2,
+                        name = "Font",
+                        order = 11,
+                        width = 1.5,
                         values = fontOptions,
                         get = function(info) return MCE.db.profile.categories[key].stackFont end,
                         set = function(info, val) MCE.db.profile.categories[key].stackFont = val; MCE:ForceUpdateAll() end,
@@ -178,8 +207,9 @@ local function CreateCategoryOptions(order, name, key)
                     },
                     stackSize = {
                         type = "range",
-                        name = "Stack Size",
-                        order = 3,
+                        name = "Size",
+                        order = 12,
+                        width = 0.7,
                         min = 8, max = 36, step = 1,
                         get = function(info) return MCE.db.profile.categories[key].stackSize end,
                         set = function(info, val) MCE.db.profile.categories[key].stackSize = val; MCE:ForceUpdateAll() end,
@@ -187,8 +217,9 @@ local function CreateCategoryOptions(order, name, key)
                     },
                     stackColor = {
                         type = "color",
-                        name = "Stack Color",
-                        order = 4,
+                        name = "Color",
+                        order = 13,
+                        width = 0.8,
                         hasAlpha = true,
                         get = function(info) 
                             local c = MCE.db.profile.categories[key].stackColor
@@ -201,10 +232,12 @@ local function CreateCategoryOptions(order, name, key)
                         end,
                         hidden = function() return not MCE.db.profile.categories[key].stackEnabled end,
                     },
+                    -- Sub-section: Position
+                    headerPos = { type = "header", name = "Positioning", order = 20, hidden = function() return not MCE.db.profile.categories[key].stackEnabled end },
                     stackAnchor = {
                         type = "select",
-                        name = "Anchor",
-                        order = 5,
+                        name = "Anchor Point",
+                        order = 21,
                         values = {["BOTTOMRIGHT"]="Bottom Right", ["BOTTOMLEFT"]="Bottom Left", ["TOPRIGHT"]="Top Right", ["TOPLEFT"]="Top Left", ["CENTER"]="Center"},
                         get = function(info) return MCE.db.profile.categories[key].stackAnchor end,
                         set = function(info, val) MCE.db.profile.categories[key].stackAnchor = val; MCE:ForceUpdateAll() end,
@@ -213,7 +246,8 @@ local function CreateCategoryOptions(order, name, key)
                     stackOffsetX = {
                         type = "range",
                         name = "Offset X",
-                        order = 6,
+                        order = 22,
+                        width = "half",
                         min = -20, max = 20, step = 1,
                         get = function(info) return MCE.db.profile.categories[key].stackOffsetX end,
                         set = function(info, val) MCE.db.profile.categories[key].stackOffsetX = val; MCE:ForceUpdateAll() end,
@@ -222,7 +256,8 @@ local function CreateCategoryOptions(order, name, key)
                     stackOffsetY = {
                         type = "range",
                         name = "Offset Y",
-                        order = 7,
+                        order = 23,
+                        width = "half",
                         min = -20, max = 20, step = 1,
                         get = function(info) return MCE.db.profile.categories[key].stackOffsetY end,
                         set = function(info, val) MCE.db.profile.categories[key].stackOffsetY = val; MCE:ForceUpdateAll() end,
@@ -231,30 +266,29 @@ local function CreateCategoryOptions(order, name, key)
                 }
             } or nil,
             
-            -- === RESET CATEGORY BUTTON ===
-            -- Removed "Maintenance" Header
-            -- Added Spacer for padding
-            spacerReset = {
-                type = "description",
-                name = " ",
-                fontSize = "medium",
-                order = 90,
-            },
-            resetCategory = {
-                type = "execute",
-                name = "Reset Category", -- Renamed to "Reset Category"
-                desc = "Reset settings for this category only.",
-                order = 91,
-                width = "full", -- Full width for better look
-                confirm = true,
-                func = function()
-                    -- Deep copy from defaults to avoid reference issues
-                    MCE.db.profile.categories[key] = CopyTable(MCE.defaults.profile.categories[key])
-                    MCE:ForceUpdateAll()
-                    LibStub("AceConfigRegistry-3.0"):NotifyChange("MinimalistCooldownEdge")
-                    print("|cff00ccffMCE:|r " .. name .. " settings reset.")
-                end,
-            },
+            -- 5. Maintenance (Reset)
+            maintenance = {
+                type = "group",
+                name = "Maintenance",
+                inline = true,
+                order = 100,
+                args = {
+                    resetCategory = {
+                        type = "execute",
+                        name = "Reset " .. name, 
+                        desc = "Revert this category to default settings.",
+                        order = 1,
+                        width = "full", 
+                        confirm = true,
+                        func = function()
+                            MCE.db.profile.categories[key] = CopyTable(MCE.defaults.profile.categories[key])
+                            MCE:ForceUpdateAll()
+                            LibStub("AceConfigRegistry-3.0"):NotifyChange("MinimalistCooldownEdge")
+                            print("|cff00ccffMCE:|r " .. name .. " settings reset.")
+                        end,
+                    },
+                }
+            }
         }
     }
 end
@@ -266,79 +300,76 @@ function MCE:GetOptions()
         args = {
             general = {
                 type = "group",
-                name = "General Settings",
+                name = "General",
                 order = 1,
                 args = {
-                    -- Header
-                    headerInfo = {
+                    banner = {
                         type = "description",
-                        name = "|cff00ccff" .. addonName .. "|r |cffffd100v" .. addonVersion .. "|r\n\n" ..
-                               "Thank you for using MiniCE! If you enjoy this addon, please leave a comment or report issues on CurseForge/GitHub.",
+                        name = "|cff00ccff" .. addonName .. "|r |cffffd100v" .. addonVersion .. "|r\n" ..
+                               "Minimalist configuration for your cooldowns. Select a category on the left to begin.",
                         fontSize = "medium",
+                        image = "Interface\\AddOns\\MinimalistCooldownEdge\\MinimalistCooldownEdge", -- If you have an icon
+                        imageWidth = 32, imageHeight = 32,
                         order = 1,
                     },
-                    -- Spacer 1
-                    spacer1 = {
-                        type = "description",
-                        name = " ",
-                        fontSize = "large",
-                        order = 1.5,
-                    },
-                    scanDepth = {
-                        type = "range",
-                        name = "Scan Depth (CPU)",
-                        desc = "Adjust detection depth. See guide below.",
-                        min = 1, max = 20, step = 1,
+                    
+                    -- Performance Section (Inline Group)
+                    perfGroup = {
+                        type = "group",
+                        name = "Performance & Detection",
+                        inline = true,
                         order = 2,
-                        get = function(info) return MCE.db.profile.scanDepth end,
-                        set = function(info, val) 
-                            MCE.db.profile.scanDepth = val
-                            print("|cff00ff00MCE:|r Global Scan Depth changed. A /reload is recommended.")
-                        end,
+                        args = {
+                            scanDepth = {
+                                type = "range",
+                                name = "Scan Depth",
+                                desc = "How deep the addon looks into UI frames to find cooldowns.",
+                                min = 1, max = 20, step = 1,
+                                order = 1,
+                                width = "double",
+                                get = function(info) return MCE.db.profile.scanDepth end,
+                                set = function(info, val) 
+                                    MCE.db.profile.scanDepth = val
+                                    print("|cff00ff00MCE:|r Global Scan Depth changed. A /reload is recommended.")
+                                end,
+                            },
+                            helpText = {
+                                type = "description",
+                                name = "\n|cff00ff00< 10|r : Efficient (Default UI)\n" ..
+                                       "|cfffff56910 - 15|r : Moderate (Bartender, Dominos)\n" ..
+                                       "|cffffa500> 15|r : Heavy (ElvUI, Complex frames)",
+                                order = 2,
+                                width = "full"
+                            },
+                        }
                     },
-                    -- Spacer 2
-                    spacer2 = {
-                        type = "description",
-                        name = " ",
-                        fontSize = "medium",
-                        order = 2.5,
-                    },
-                    -- Legend
-                    scanDepthLegend = {
-                        type = "description",
-                        name = "Performance Impact:\n" ..
-                               "|cff00ff00• < 10 : Efficient (Blizzard UI)|r\n" ..
-                               "|cfffff569• 10-15 : Moderate (Bartender, Dominos)|r\n" ..
-                               "|cffffa500• > 15 : High CPU (ElvUI, Plater, VuhDo)|r",
+
+                    -- Reset Section
+                    resetGroup = {
+                        type = "group",
+                        name = "Danger Zone",
+                        inline = true,
                         order = 3,
-                        fontSize = "medium",
-                    },
-                    -- === RESET GLOBAL BUTTON ===
-                    -- Removed "Maintenance" Header
-                    -- Added Spacer
-                    spacerGlobalReset = {
-                        type = "description",
-                        name = " ",
-                        fontSize = "medium",
-                        order = 90,
-                    },
-                    resetAll = {
-                        type = "execute",
-                        name = "Reset ALL Settings & Reload",
-                        desc = "Resets the entire profile to default values and immediately reloads the UI.",
-                        order = 91,
-                        width = "full", -- [CHANGE] Forces button to take full width
-                        confirm = true,
-                        func = function() 
-                            MCE.db:ResetProfile()
-                            print("|cff00ccffMCE:|r Profile reset. Reloading UI...")
-                            ReloadUI()
-                        end,
-                    },
+                        args = {
+                            resetAll = {
+                                type = "execute",
+                                name = "Factory Reset (All)",
+                                desc = "Resets the entire profile to default values and reloads the UI.",
+                                order = 1,
+                                width = "full",
+                                confirm = true,
+                                func = function() 
+                                    MCE.db:ResetProfile()
+                                    print("|cff00ccffMCE:|r Profile reset. Reloading UI...")
+                                    ReloadUI()
+                                end,
+                            },
+                        }
+                    }
                 }
             },
             actionbar = CreateCategoryOptions(2, "Action Bars", "actionbar"),
-            global    = CreateCategoryOptions(3, "Global & CD Manager", "global"),
+            global    = CreateCategoryOptions(3, "Global Items", "global"),
             nameplate = CreateCategoryOptions(4, "Nameplates", "nameplate"),
             unitframe = CreateCategoryOptions(5, "Unit Frames", "unitframe"),
             
