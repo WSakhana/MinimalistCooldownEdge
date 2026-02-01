@@ -12,13 +12,14 @@ local fontOptions = {
     ["Fonts\\MORPHEUS.TTF"] = "Morpheus",
     ["Fonts\\skurri.ttf"] = "Skurri",
     ["Fonts\\2002.TTF"] = "2002",
+    ["Interface\\AddOns\\MinimalistCooldownEdge\\expressway.ttf"] = "Expressway",
 }
 
 -- === DEFAULTS ===
 local function GetCategoryDefaults(enabled, fontSize)
     return {
         enabled = enabled,
-        font = "Fonts\\FRIZQT__.TTF",
+        font = "Interface\\AddOns\\MinimalistCooldownEdge\\expressway.ttf",
         fontSize = fontSize or 18,
         fontStyle = "OUTLINE",
         textColor = { r = 1, g = 0.8, b = 0, a = 1 },
@@ -27,7 +28,7 @@ local function GetCategoryDefaults(enabled, fontSize)
         hideCountdownNumbers = false,
         -- Stack Defaults
         stackEnabled = false,
-        stackFont = "Fonts\\FRIZQT__.TTF",
+        stackFont = "Interface\\AddOns\\MinimalistCooldownEdge\\expressway.ttf",
         stackSize = 14,
         stackStyle = "OUTLINE",
         stackColor = { r = 1, g = 1, b = 1, a = 1 },

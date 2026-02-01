@@ -1,5 +1,9 @@
 # Changelog
 
+## [2.3.1] - 2026-02-01
+### Added
+- Added the "Expressway" font option.
+
 ## [2.3] - 2026-02-01
 ### Fixed
 - Missing Ace3 libraries in the TOC.
