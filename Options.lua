@@ -27,14 +27,14 @@ local function GetCategoryDefaults(enabled, fontSize)
         edgeScale = 1.4,
         hideCountdownNumbers = false,
         -- Stack Defaults
-        stackEnabled = false,
+        stackEnabled = true,
         stackFont = "Interface\\AddOns\\MinimalistCooldownEdge\\expressway.ttf",
-        stackSize = 14,
+        stackSize = 16,
         stackStyle = "OUTLINE",
         stackColor = { r = 1, g = 1, b = 1, a = 1 },
         stackAnchor = "BOTTOMRIGHT",
-        stackOffsetX = -2,
-        stackOffsetY = 2,
+        stackOffsetX = -3,
+        stackOffsetY = 3,
     }
 end
 
