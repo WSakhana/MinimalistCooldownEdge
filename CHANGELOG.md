@@ -1,5 +1,9 @@
 # Changelog
 
+## [2.3] - 2026-02-01
+### Fixed
+- Missing Ace3 libraries in the TOC.
+
 # [2.2] - 2026-02-01
 ### Changed
 - **Rebranding:** The addon is now officially named **MiniCE**! The display name in the Addon List and Options Panel has been updated to reflect this change.
