@@ -10,6 +10,15 @@ local hardcodedBlacklist = { "Glider", "Party", "Compact", "Raid", "VuhDo", "Gri
 -- === OPTIMIZATION: CATEGORY CACHE ===
 local categoryCache = setmetatable({}, { __mode = "k" })
 
+-- === OPTIMIZATION: TRACKED COOLDOWNS ===
+local trackedCooldowns = setmetatable({}, { __mode = "k" })
+
+local function TrackCooldown(frame)
+    if frame then
+        trackedCooldowns[frame] = true
+    end
+end
+
 -- === ACE ADDON LIFECYCLE ===
 function MCE:OnInitialize()
     -- Use the V2 database
@@ -28,7 +37,7 @@ end
 function MCE:OnEnable()
     self:SetupHooks()
     -- Delay initial update slightly to ensure UI is loaded
-    C_Timer.After(2, function() self:ForceUpdateAll() end)
+    C_Timer.After(2, function() self:ForceUpdateAll(true) end)
 end
 
 function MCE:SlashCommand(input)
@@ -114,16 +123,18 @@ function MCE:StyleStackCount(cooldownFrame, config, category)
 end
 
 -- === STYLE APPLICATION ===
-function MCE:ApplyCustomStyle(self_frame)
+function MCE:ApplyCustomStyle(self_frame, forcedCategory)
     local safe, isForbidden = pcall(function() return not self_frame or self_frame:IsForbidden() end)
     if not safe or isForbidden then return end
+
+    TrackCooldown(self_frame)
 
     -- [CRITICAL FIX] GUARD CLAUSE
     if not self.db or not self.db.profile or not self.db.profile.categories then
         return
     end
 
-    local category = self:GetCooldownCategory(self_frame)
+    local category = forcedCategory or self:GetCooldownCategory(self_frame)
     if category == "blacklist" then return end
 
     -- Retrieve settings from AceDB
@@ -173,22 +184,46 @@ function MCE:ApplyCustomStyle(self_frame)
     end
 end
 
-function MCE:ForceUpdateAll()
-    local frame = EnumerateFrames()
-    while frame do
-        local safe, isForbidden = pcall(function() return frame:IsForbidden() end)
-        if safe and not isForbidden then
-            if frame:IsObjectType("Cooldown") then
-                self:ApplyCustomStyle(frame)
-            elseif frame.cooldown and type(frame.cooldown) == "table" then
-                local safeCD, isForbiddenCD = pcall(function() return frame.cooldown:IsForbidden() end)
-                if safeCD and not isForbiddenCD then
-                    self:ApplyCustomStyle(frame.cooldown)
+function MCE:ForceUpdateAll(fullScan)
+    if fullScan or not self.fullScanDone then
+        self.fullScanDone = true
+        local frame = EnumerateFrames()
+        while frame do
+            local safe, isForbidden = pcall(function() return frame:IsForbidden() end)
+            if safe and not isForbidden then
+                if frame:IsObjectType("Cooldown") then
+                    self:ApplyCustomStyle(frame)
+                elseif frame.cooldown and type(frame.cooldown) == "table" then
+                    local safeCD, isForbiddenCD = pcall(function() return frame.cooldown:IsForbidden() end)
+                    if safeCD and not isForbiddenCD then
+                        self:ApplyCustomStyle(frame.cooldown)
+                    end
                 end
             end
+            frame = EnumerateFrames(frame)
         end
-        frame = EnumerateFrames(frame)
+        return
     end
+
+    for cooldown in pairs(trackedCooldowns) do
+        if cooldown and cooldown.IsObjectType and cooldown:IsObjectType("Cooldown") then
+            self:ApplyCustomStyle(cooldown)
+        end
+    end
+end
+
+-- === NAMEPLATE EVENTS ===
+function MCE:NAME_PLATE_UNIT_ADDED(unit)
+    local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit and C_NamePlate.GetNamePlateForUnit(unit)
+    if plate then
+        C_Timer.After(0, function()
+            MCE:StyleCooldownsInFrame(plate, "nameplate", 6)
+        end)
+    end
+end
+
+function MCE:NAME_PLATE_UNIT_REMOVED(unit)
+    -- Nothing required; weak tables will clean up.
 end
 
 function MCE:SetupHooks()
@@ -202,14 +237,58 @@ function MCE:SetupHooks()
         end)
     end
 
+    if ActionButton_UpdateCooldown then
+        hooksecurefunc("ActionButton_UpdateCooldown", function(button)
+            local cooldown = button and (button.cooldown or button.Cooldown)
+            if cooldown then
+                C_Timer.After(0, function() MCE:ApplyCustomStyle(cooldown, "actionbar") end)
+            end
+        end)
+    end
+
+    if C_NamePlate and C_NamePlate.GetNamePlateForUnit then
+        self:RegisterEvent("NAME_PLATE_UNIT_ADDED")
+        self:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
+    end
+
     if LibStub then
         local LAB = LibStub("LibActionButton-1.0", true)
         if LAB then
             LAB:RegisterCallback("OnButtonUpdate", function(_, button)
                 C_Timer.After(0, function()
-                    if button and button.cooldown then MCE:ApplyCustomStyle(button.cooldown) end
+                    if button and button.cooldown then MCE:ApplyCustomStyle(button.cooldown, "actionbar") end
                 end)
             end)
         end
     end
+end
+
+-- === SCOPED SCANNING ===
+function MCE:StyleCooldownsInFrame(rootFrame, forcedCategory, maxDepth)
+    if not rootFrame then return end
+    maxDepth = maxDepth or 5
+
+    local function scan(frame, depth)
+        if not frame or depth > maxDepth then return end
+        local safe, isForbidden = pcall(function() return frame:IsForbidden() end)
+        if safe and not isForbidden then
+            if frame.IsObjectType and frame:IsObjectType("Cooldown") then
+                self:ApplyCustomStyle(frame, forcedCategory)
+            elseif frame.cooldown and type(frame.cooldown) == "table" then
+                local safeCD, isForbiddenCD = pcall(function() return frame.cooldown:IsForbidden() end)
+                if safeCD and not isForbiddenCD then
+                    self:ApplyCustomStyle(frame.cooldown, forcedCategory)
+                end
+            end
+        end
+
+        if frame.GetChildren then
+            local children = { frame:GetChildren() }
+            for _, child in ipairs(children) do
+                scan(child, depth + 1)
+            end
+        end
+    end
+
+    scan(rootFrame, 0)
 end
