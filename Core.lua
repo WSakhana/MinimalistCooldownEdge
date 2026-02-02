@@ -12,8 +12,7 @@ local categoryCache = setmetatable({}, { __mode = "k" })
 
 -- === ACE ADDON LIFECYCLE ===
 function MCE:OnInitialize()
-    -- [FIX] Use the NEW database name "MinimalistCooldownEdgeDB_v2"
-    -- This ignores the old V1 database on users' PCs and creates a fresh V2 structure.
+    -- Use the V2 database
     self.db = LibStub("AceDB-3.0"):New("MinimalistCooldownEdgeDB_v2", self.defaults, true)
 
     -- Register Options Table
@@ -22,7 +21,7 @@ function MCE:OnInitialize()
 
     -- Register Chat Command
     self:RegisterChatCommand("mce", "SlashCommand")
-    self:RegisterChatCommand("minice", "SlashCommand") -- La nouvelle
+    self:RegisterChatCommand("minice", "SlashCommand")
     self:RegisterChatCommand("minimalistcooldownedge", "SlashCommand")
 end
 
@@ -120,8 +119,6 @@ function MCE:ApplyCustomStyle(self_frame)
     if not safe or isForbidden then return end
 
     -- [CRITICAL FIX] GUARD CLAUSE
-    -- If the database or profile hasn't initialized yet, STOP here.
-    -- This prevents the "attempt to index field 'categories' (a nil value)" crash.
     if not self.db or not self.db.profile or not self.db.profile.categories then
         return
     end
@@ -155,13 +152,21 @@ function MCE:ApplyCustomStyle(self_frame)
         pcall(function() self_frame:SetHideCountdownNumbers(config.hideCountdownNumbers) end)
     end
     
+    -- === FONT STRING STYLING & POSITIONING ===
     if self_frame.GetRegions then
         local regions = {self_frame:GetRegions()}
         for _, region in ipairs(regions) do
             if region:GetObjectType() == "FontString" and not region:IsForbidden() then
+                -- 1. Apply Typography
                 region:SetFont(config.font, config.fontSize, config.fontStyle)
                 if config.textColor then
                     region:SetTextColor(config.textColor.r, config.textColor.g, config.textColor.b, config.textColor.a)
+                end
+                
+                -- 2. Apply Positioning (New Feature)
+                if config.textAnchor then
+                    region:ClearAllPoints()
+                    region:SetPoint(config.textAnchor, self_frame, config.textAnchor, config.textOffsetX, config.textOffsetY)
                 end
             end
         end

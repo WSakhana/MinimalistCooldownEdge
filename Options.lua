@@ -19,13 +19,20 @@ local fontOptions = {
 local function GetCategoryDefaults(enabled, fontSize)
     return {
         enabled = enabled,
+        -- Typography Defaults
         font = "Interface\\AddOns\\MinimalistCooldownEdge\\expressway.ttf",
         fontSize = fontSize or 18,
         fontStyle = "OUTLINE",
         textColor = { r = 1, g = 0.8, b = 0, a = 1 },
+        textAnchor = "CENTER",    -- NEW: Default Anchor
+        textOffsetX = 0,          -- NEW: Default X
+        textOffsetY = 0,          -- NEW: Default Y
+        hideCountdownNumbers = false,
+        
+        -- Edge Defaults
         edgeEnabled = true,
         edgeScale = 1.4,
-        hideCountdownNumbers = false,
+        
         -- Stack Defaults
         stackEnabled = true,
         stackFont = "Interface\\AddOns\\MinimalistCooldownEdge\\expressway.ttf",
@@ -96,7 +103,7 @@ local function CreateCategoryOptions(order, name, key)
                         type = "select",
                         name = "Font Face",
                         order = 1,
-                        width = 1.5, -- UX: Give font name more space
+                        width = 1.5,
                         values = fontOptions,
                         get = function(info) return MCE.db.profile.categories[key].font end,
                         set = function(info, val) MCE.db.profile.categories[key].font = val; MCE:ForceUpdateAll() end,
@@ -105,7 +112,7 @@ local function CreateCategoryOptions(order, name, key)
                         type = "range",
                         name = "Size",
                         order = 2,
-                        width = 0.7, -- UX: Compact slider
+                        width = 0.7,
                         min = 8, max = 36, step = 1,
                         get = function(info) return MCE.db.profile.categories[key].fontSize end,
                         set = function(info, val) MCE.db.profile.categories[key].fontSize = val; MCE:ForceUpdateAll() end,
@@ -114,7 +121,7 @@ local function CreateCategoryOptions(order, name, key)
                         type = "select",
                         name = "Outline",
                         order = 3,
-                        width = 0.8, -- UX: Compact dropdown
+                        width = 0.8,
                         values = { ["NONE"] = "None", ["OUTLINE"] = "Outline", ["THICKOUTLINE"] = "Thick", ["MONOCHROME"] = "Mono" },
                         get = function(info) return MCE.db.profile.categories[key].fontStyle end,
                         set = function(info, val) MCE.db.profile.categories[key].fontStyle = val; MCE:ForceUpdateAll() end,
@@ -143,6 +150,34 @@ local function CreateCategoryOptions(order, name, key)
                         width = "full",
                         get = function(info) return MCE.db.profile.categories[key].hideCountdownNumbers end,
                         set = function(info, val) MCE.db.profile.categories[key].hideCountdownNumbers = val; MCE:ForceUpdateAll() end,
+                    },
+                    -- NEW: Positioning Sub-Section
+                    posHeader = { type = "header", name = "Positioning", order = 6 },
+                    textAnchor = {
+                        type = "select",
+                        name = "Anchor Point",
+                        order = 7,
+                        values = {["BOTTOMRIGHT"]="Bottom Right", ["BOTTOMLEFT"]="Bottom Left", ["TOPRIGHT"]="Top Right", ["TOPLEFT"]="Top Left", ["CENTER"]="Center"},
+                        get = function(info) return MCE.db.profile.categories[key].textAnchor or "CENTER" end,
+                        set = function(info, val) MCE.db.profile.categories[key].textAnchor = val; MCE:ForceUpdateAll() end,
+                    },
+                    textOffsetX = {
+                        type = "range",
+                        name = "Offset X",
+                        order = 8,
+                        width = "half",
+                        min = -30, max = 30, step = 1,
+                        get = function(info) return MCE.db.profile.categories[key].textOffsetX or 0 end,
+                        set = function(info, val) MCE.db.profile.categories[key].textOffsetX = val; MCE:ForceUpdateAll() end,
+                    },
+                    textOffsetY = {
+                        type = "range",
+                        name = "Offset Y",
+                        order = 9,
+                        width = "half",
+                        min = -30, max = 30, step = 1,
+                        get = function(info) return MCE.db.profile.categories[key].textOffsetY or 0 end,
+                        set = function(info, val) MCE.db.profile.categories[key].textOffsetY = val; MCE:ForceUpdateAll() end,
                     },
                 }
             },
@@ -308,7 +343,7 @@ function MCE:GetOptions()
                         name = "|cff00ccff" .. addonName .. "|r |cffffd100v" .. addonVersion .. "|r\n" ..
                                "Minimalist configuration for your cooldowns. Select a category on the left to begin.",
                         fontSize = "medium",
-                        image = "Interface\\AddOns\\MinimalistCooldownEdge\\MinimalistCooldownEdge", -- If you have an icon
+                        image = "Interface\\AddOns\\MinimalistCooldownEdge\\MinimalistCooldownEdge",
                         imageWidth = 32, imageHeight = 32,
                         order = 1,
                     },

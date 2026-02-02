@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.5.0] - 2026-02-02
+### Added
+- **Cooldown Text Positioning:** You can now adjust the position of the main Cooldown Number (Timer).
+  - Added "Anchor Point" (e.g., Center, Top Right).
+  - Added "Offset X" and "Offset Y" sliders.
+  - Available for all categories (Action Bars, Nameplates, UnitFrames, etc.).
+  
 ## [2.4.1] - 2026-02-01
 ### Changed
 - Adjust category options for improved styling, orders and functionality
