@@ -6,6 +6,7 @@
   - Added "Anchor Point" (e.g., Center, Top Right).
   - Added "Offset X" and "Offset Y" sliders.
   - Available for all categories (Action Bars, Nameplates, UnitFrames, etc.).
+  - Enhance cooldown tracking and style application logic for improved performance and functionality
   
 ## [2.4.1] - 2026-02-01
 ### Changed
