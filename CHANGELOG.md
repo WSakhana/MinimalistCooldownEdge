@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.7.0] - 2026-02-11
+### Improved
+- **Performance:** Upvalued frequently called globals (`string.find`, `pcall`, `C_Timer.After`, etc.) to reduce table lookups.
+- **Performance:** Blacklist is now a hash table for O(1) lookups instead of O(n) `ipairs` iteration.
+- **Performance:** All `string.find` calls now use `plain=true` (4th argument) since no patterns are needed, avoiding regex overhead.
+- **Performance:** Replaced anonymous `pcall(function() ... end)` closures with direct `pcall(frame.Method, frame, ...)` calls to eliminate garbage generation.
+- **Performance:** Centralized forbidden-frame checks into a single reusable `IsForbiddenFrame()` helper.
+- **Bug Fix:** Font style "None" now correctly passes `""` to the WoW API instead of `"NONE"`, which caused font rendering issues.
+- **Bug Fix:** `SetEdgeScale` is now nil-checked before calling, preventing errors on cooldown frames that don't support it.
+- **UX:** Added missing **Outline Style** selector for Stack Counter text (was previously hardcoded with no UI control).
+- **UX:** Profiles tab now always appears last in the options panel (`order = 10`).
+- **Clean Code:** Extracted repetitive get/set closures in Options.lua into reusable `CatGet`, `CatSet`, `CatColorGet`, `CatColorSet` helper functions (~60% boilerplate reduction).
+- **Clean Code:** Consolidated duplicate lookup tables (`fontOptions`, anchor values, outline values) into shared constants (`FONT_OPTIONS`, `ANCHOR_OPTIONS`, `OUTLINE_OPTIONS`).
+- **Clean Code:** Renamed ambiguous `self_frame` parameter to `cdFrame` for clarity.
+- **Clean Code:** Removed dead `TrackCooldown()` wrapper function; tracking is now inline.
+- **Clean Code:** Removed redundant `LibStub` nil check around LibActionButton hook (LibStub is guaranteed loaded via TOC).
+
 ## [2.6.0] - 2026-02-11
 ### Added
 - Add localization support for multiple languages in MinimalistCooldownEdge

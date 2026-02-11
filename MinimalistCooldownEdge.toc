@@ -2,7 +2,7 @@
 ## Title: |cff00ccffMiniCE|r (MinimalistCooldownEdge)
 ## Notes: Clean cooldowns with category-specific styles.
 ## Author: Anahkas
-## Version: 2.6.0
+## Version: 2.7.0
 ## IconTexture: Interface\AddOns\MinimalistCooldownEdge\MinimalistCooldownEdge
 ## Category: Action Bars
 ## SavedVariables: MinimalistCooldownEdgeDB_v2
