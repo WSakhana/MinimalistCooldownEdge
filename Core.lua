@@ -3,6 +3,7 @@
 -- Initialize AceAddon
 local addonName, addon = ...
 local MCE = LibStub("AceAddon-3.0"):NewAddon(addon, "MinimalistCooldownEdge", "AceConsole-3.0", "AceEvent-3.0", "AceHook-3.0")
+local L = LibStub("AceLocale-3.0"):GetLocale("MinimalistCooldownEdge")
 
 -- === HARDCODED BLACKLIST ===
 local hardcodedBlacklist = { "Glider", "Party", "Compact", "Raid", "VuhDo", "Grid" }
@@ -42,7 +43,7 @@ end
 
 function MCE:SlashCommand(input)
     if InCombatLockdown() then
-        self:Print("Cannot open options in combat.")
+        self:Print(L["Cannot open options in combat."])
         return
     end
     LibStub("AceConfigDialog-3.0"):Open("MinimalistCooldownEdge")

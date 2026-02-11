@@ -1,5 +1,6 @@
 local addonName, addon = ...
 local MCE = LibStub("AceAddon-3.0"):GetAddon("MinimalistCooldownEdge")
+local L = LibStub("AceLocale-3.0"):GetLocale("MinimalistCooldownEdge")
 
 -- Retrieve Version dynamically from TOC
 local addonVersion = C_AddOns.GetAddOnMetadata(addonName, "Version") or "Dev"
@@ -72,14 +73,14 @@ local function CreateCategoryOptions(order, name, key)
             -- 1. Main Toggle
             enableGroup = {
                 type = "group",
-                name = "State",
+                name = L["State"],
                 inline = true,
                 order = 1,
                 args = {
                     enabled = {
                         type = "toggle",
-                        name = "Enable " .. name,
-                        desc = "Toggle styling for this category.",
+                        name = string.format(L["Enable %s"], name),
+                        desc = L["Toggle styling for this category."],
                         width = "full",
                         order = 1,
                         get = function(info) return MCE.db.profile.categories[key].enabled end,
@@ -94,14 +95,14 @@ local function CreateCategoryOptions(order, name, key)
             -- 2. Typography Group (Inline for visual grouping)
             typography = {
                 type = "group",
-                name = "Typography (Cooldown Numbers)",
+                name = L["Typography (Cooldown Numbers)"],
                 inline = true,
                 order = 10,
                 disabled = function() return IsCatDisabled(key) end,
                 args = {
                     font = {
                         type = "select",
-                        name = "Font Face",
+                        name = L["Font Face"],
                         order = 1,
                         width = 1.5,
                         values = fontOptions,
@@ -110,7 +111,7 @@ local function CreateCategoryOptions(order, name, key)
                     },
                     fontSize = {
                         type = "range",
-                        name = "Size",
+                        name = L["Size"],
                         order = 2,
                         width = 0.7,
                         min = 8, max = 36, step = 1,
@@ -119,16 +120,16 @@ local function CreateCategoryOptions(order, name, key)
                     },
                     fontStyle = {
                         type = "select",
-                        name = "Outline",
+                        name = L["Outline"],
                         order = 3,
                         width = 0.8,
-                        values = { ["NONE"] = "None", ["OUTLINE"] = "Outline", ["THICKOUTLINE"] = "Thick", ["MONOCHROME"] = "Mono" },
+                        values = { ["NONE"] = L["None"], ["OUTLINE"] = L["Outline"], ["THICKOUTLINE"] = L["Thick"], ["MONOCHROME"] = L["Mono"] },
                         get = function(info) return MCE.db.profile.categories[key].fontStyle end,
                         set = function(info, val) MCE.db.profile.categories[key].fontStyle = val; MCE:ForceUpdateAll() end,
                     },
                     textColor = {
                         type = "color",
-                        name = "Color",
+                        name = L["Color"],
                         order = 4,
                         width = "half",
                         hasAlpha = true,
@@ -144,26 +145,26 @@ local function CreateCategoryOptions(order, name, key)
                     },
                     hideCountdownNumbers = {
                         type = "toggle",
-                        name = "Hide Numbers",
-                        desc = "Hide the text entirely (useful if you only want the swipe edge or stacks).",
+                        name = L["Hide Numbers"],
+                        desc = L["Hide the text entirely (useful if you only want the swipe edge or stacks)."],
                         order = 5,
                         width = "full",
                         get = function(info) return MCE.db.profile.categories[key].hideCountdownNumbers end,
                         set = function(info, val) MCE.db.profile.categories[key].hideCountdownNumbers = val; MCE:ForceUpdateAll() end,
                     },
                     -- NEW: Positioning Sub-Section
-                    posHeader = { type = "header", name = "Positioning", order = 6 },
+                    posHeader = { type = "header", name = L["Positioning"], order = 6 },
                     textAnchor = {
                         type = "select",
-                        name = "Anchor Point",
+                        name = L["Anchor Point"],
                         order = 7,
-                        values = {["BOTTOMRIGHT"]="Bottom Right", ["BOTTOMLEFT"]="Bottom Left", ["TOPRIGHT"]="Top Right", ["TOPLEFT"]="Top Left", ["CENTER"]="Center"},
+                        values = {["BOTTOMRIGHT"]=L["Bottom Right"], ["BOTTOMLEFT"]=L["Bottom Left"], ["TOPRIGHT"]=L["Top Right"], ["TOPLEFT"]=L["Top Left"], ["CENTER"]=L["Center"]},
                         get = function(info) return MCE.db.profile.categories[key].textAnchor or "CENTER" end,
                         set = function(info, val) MCE.db.profile.categories[key].textAnchor = val; MCE:ForceUpdateAll() end,
                     },
                     textOffsetX = {
                         type = "range",
-                        name = "Offset X",
+                        name = L["Offset X"],
                         order = 8,
                         width = "half",
                         min = -30, max = 30, step = 1,
@@ -172,7 +173,7 @@ local function CreateCategoryOptions(order, name, key)
                     },
                     textOffsetY = {
                         type = "range",
-                        name = "Offset Y",
+                        name = L["Offset Y"],
                         order = 9,
                         width = "half",
                         min = -30, max = 30, step = 1,
@@ -185,15 +186,15 @@ local function CreateCategoryOptions(order, name, key)
             -- 3. Swipe Edge Group
             swipeEdge = {
                 type = "group",
-                name = "Swipe Animation",
+                name = L["Swipe Animation"],
                 inline = true,
                 order = 20,
                 disabled = function() return IsCatDisabled(key) end,
                 args = {
                     edgeEnabled = {
                         type = "toggle",
-                        name = "Show Swipe Edge",
-                        desc = "Shows the white line indicating cooldown progress.",
+                        name = L["Show Swipe Edge"],
+                        desc = L["Shows the white line indicating cooldown progress."],
                         order = 1,
                         width = "normal",
                         get = function(info) return MCE.db.profile.categories[key].edgeEnabled end,
@@ -201,8 +202,8 @@ local function CreateCategoryOptions(order, name, key)
                     },
                     edgeScale = {
                         type = "range",
-                        name = "Edge Thickness",
-                        desc = "Scale of the swipe line (1.0 = Default).",
+                        name = L["Edge Thickness"],
+                        desc = L["Scale of the swipe line (1.0 = Default)."],
                         order = 2,
                         min = 0.5, max = 2.0, step = 0.1,
                         get = function(info) return MCE.db.profile.categories[key].edgeScale end,
@@ -214,25 +215,25 @@ local function CreateCategoryOptions(order, name, key)
             -- 4. Stack Counts (Conditional)
             stackGroup = (key == "actionbar") and {
                 type = "group",
-                name = "Stack Counters / Charges",
+                name = L["Stack Counters / Charges"],
                 inline = true,
                 order = 30,
                 disabled = function() return IsCatDisabled(key) end,
                 args = {
                     stackEnabled = {
                         type = "toggle",
-                        name = "Customize Stack Text",
-                        desc = "Take control over the charge counter (e.g., 2 stacks of Conflagrate).",
+                        name = L["Customize Stack Text"],
+                        desc = L["Take control over the charge counter (e.g., 2 stacks of Conflagrate)."],
                         order = 1,
                         width = "full",
                         get = function(info) return MCE.db.profile.categories[key].stackEnabled end,
                         set = function(info, val) MCE.db.profile.categories[key].stackEnabled = val; MCE:ForceUpdateAll() end,
                     },
                     -- Sub-section: Style
-                    headerStyle = { type = "header", name = "Style", order = 10, hidden = function() return not MCE.db.profile.categories[key].stackEnabled end },
+                    headerStyle = { type = "header", name = L["Style"], order = 10, hidden = function() return not MCE.db.profile.categories[key].stackEnabled end },
                     stackFont = {
                         type = "select",
-                        name = "Font",
+                        name = L["Font"],
                         order = 11,
                         width = 1.5,
                         values = fontOptions,
@@ -242,7 +243,7 @@ local function CreateCategoryOptions(order, name, key)
                     },
                     stackSize = {
                         type = "range",
-                        name = "Size",
+                        name = L["Size"],
                         order = 12,
                         width = 0.7,
                         min = 8, max = 36, step = 1,
@@ -252,7 +253,7 @@ local function CreateCategoryOptions(order, name, key)
                     },
                     stackColor = {
                         type = "color",
-                        name = "Color",
+                        name = L["Color"],
                         order = 13,
                         width = 0.8,
                         hasAlpha = true,
@@ -268,19 +269,19 @@ local function CreateCategoryOptions(order, name, key)
                         hidden = function() return not MCE.db.profile.categories[key].stackEnabled end,
                     },
                     -- Sub-section: Position
-                    headerPos = { type = "header", name = "Positioning", order = 20, hidden = function() return not MCE.db.profile.categories[key].stackEnabled end },
+                    headerPos = { type = "header", name = L["Positioning"], order = 20, hidden = function() return not MCE.db.profile.categories[key].stackEnabled end },
                     stackAnchor = {
                         type = "select",
-                        name = "Anchor Point",
+                        name = L["Anchor Point"],
                         order = 21,
-                        values = {["BOTTOMRIGHT"]="Bottom Right", ["BOTTOMLEFT"]="Bottom Left", ["TOPRIGHT"]="Top Right", ["TOPLEFT"]="Top Left", ["CENTER"]="Center"},
+                        values = {["BOTTOMRIGHT"]=L["Bottom Right"], ["BOTTOMLEFT"]=L["Bottom Left"], ["TOPRIGHT"]=L["Top Right"], ["TOPLEFT"]=L["Top Left"], ["CENTER"]=L["Center"]},
                         get = function(info) return MCE.db.profile.categories[key].stackAnchor end,
                         set = function(info, val) MCE.db.profile.categories[key].stackAnchor = val; MCE:ForceUpdateAll() end,
                         hidden = function() return not MCE.db.profile.categories[key].stackEnabled end,
                     },
                     stackOffsetX = {
                         type = "range",
-                        name = "Offset X",
+                        name = L["Offset X"],
                         order = 22,
                         width = "half",
                         min = -20, max = 20, step = 1,
@@ -290,7 +291,7 @@ local function CreateCategoryOptions(order, name, key)
                     },
                     stackOffsetY = {
                         type = "range",
-                        name = "Offset Y",
+                        name = L["Offset Y"],
                         order = 23,
                         width = "half",
                         min = -20, max = 20, step = 1,
@@ -304,14 +305,14 @@ local function CreateCategoryOptions(order, name, key)
             -- 5. Maintenance (Reset)
             maintenance = {
                 type = "group",
-                name = "Maintenance",
+                name = L["Maintenance"],
                 inline = true,
                 order = 100,
                 args = {
                     resetCategory = {
                         type = "execute",
-                        name = "Reset " .. name, 
-                        desc = "Revert this category to default settings.",
+                        name = string.format(L["Reset %s"], name), 
+                        desc = L["Revert this category to default settings."],
                         order = 1,
                         width = "full", 
                         confirm = true,
@@ -319,7 +320,7 @@ local function CreateCategoryOptions(order, name, key)
                             MCE.db.profile.categories[key] = CopyTable(MCE.defaults.profile.categories[key])
                             MCE:ForceUpdateAll()
                             LibStub("AceConfigRegistry-3.0"):NotifyChange("MinimalistCooldownEdge")
-                            print("|cff00ccffMCE:|r " .. name .. " settings reset.")
+                            print("|cff00ccffMCE:|r " .. string.format(L["%s settings reset."], name))
                         end,
                     },
                 }
@@ -335,13 +336,13 @@ function MCE:GetOptions()
         args = {
             general = {
                 type = "group",
-                name = "General",
+                name = L["General"],
                 order = 1,
                 args = {
                     banner = {
                         type = "description",
                         name = "|cff00ccff" .. addonName .. "|r |cffffd100v" .. addonVersion .. "|r\n" ..
-                               "Minimalist configuration for your cooldowns. Select a category on the left to begin.",
+                               L["BANNER_DESC"],
                         fontSize = "medium",
                         image = "Interface\\AddOns\\MinimalistCooldownEdge\\MinimalistCooldownEdge",
                         imageWidth = 32, imageHeight = 32,
@@ -351,28 +352,26 @@ function MCE:GetOptions()
                     -- Performance Section (Inline Group)
                     perfGroup = {
                         type = "group",
-                        name = "Performance & Detection",
+                        name = L["Performance & Detection"],
                         inline = true,
                         order = 2,
                         args = {
                             scanDepth = {
                                 type = "range",
-                                name = "Scan Depth",
-                                desc = "How deep the addon looks into UI frames to find cooldowns.",
+                                name = L["Scan Depth"],
+                                desc = L["How deep the addon looks into UI frames to find cooldowns."],
                                 min = 1, max = 20, step = 1,
                                 order = 1,
                                 width = "double",
                                 get = function(info) return MCE.db.profile.scanDepth end,
                                 set = function(info, val) 
                                     MCE.db.profile.scanDepth = val
-                                    print("|cff00ff00MCE:|r Global Scan Depth changed. A /reload is recommended.")
+                                    print("|cff00ff00MCE:|r " .. L["Global Scan Depth changed. A /reload is recommended."])
                                 end,
                             },
                             helpText = {
                                 type = "description",
-                                name = "\n|cff00ff00< 10|r : Efficient (Default UI)\n" ..
-                                       "|cfffff56910 - 15|r : Moderate (Bartender, Dominos)\n" ..
-                                       "|cffffa500> 15|r : Heavy (ElvUI, Complex frames)",
+                                name = L["SCAN_DEPTH_HELP"],
                                 order = 2,
                                 width = "full"
                             },
@@ -382,20 +381,20 @@ function MCE:GetOptions()
                     -- Reset Section
                     resetGroup = {
                         type = "group",
-                        name = "Danger Zone",
+                        name = L["Danger Zone"],
                         inline = true,
                         order = 3,
                         args = {
                             resetAll = {
                                 type = "execute",
-                                name = "Factory Reset (All)",
-                                desc = "Resets the entire profile to default values and reloads the UI.",
+                                name = L["Factory Reset (All)"],
+                                desc = L["Resets the entire profile to default values and reloads the UI."],
                                 order = 1,
                                 width = "full",
                                 confirm = true,
                                 func = function() 
                                     MCE.db:ResetProfile()
-                                    print("|cff00ccffMCE:|r Profile reset. Reloading UI...")
+                                    print("|cff00ccffMCE:|r " .. L["Profile reset. Reloading UI..."])
                                     ReloadUI()
                                 end,
                             },
@@ -403,10 +402,10 @@ function MCE:GetOptions()
                     }
                 }
             },
-            actionbar = CreateCategoryOptions(2, "Action Bars", "actionbar"),
-            nameplate = CreateCategoryOptions(3, "Nameplates", "nameplate"),
-            unitframe = CreateCategoryOptions(4, "Unit Frames", "unitframe"),
-            global    = CreateCategoryOptions(5, "CD Manager & Others", "global"),
+            actionbar = CreateCategoryOptions(2, L["Action Bars"], "actionbar"),
+            nameplate = CreateCategoryOptions(3, L["Nameplates"], "nameplate"),
+            unitframe = CreateCategoryOptions(4, L["Unit Frames"], "unitframe"),
+            global    = CreateCategoryOptions(5, L["CD Manager & Others"], "global"),
             
             profiles = LibStub("AceDBOptions-3.0"):GetOptionsTable(MCE.db),
         }

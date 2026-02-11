@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.0] - 2026-02-11
+### Added
+- Add localization support for multiple languages in MinimalistCooldownEdge
+  - Created English (enUS) localization file with default strings.
+  - Added Spanish (esES and esMX) localization files with translations.
+  - Introduced French (frFR), Italian (itIT), Korean (koKR), Brazilian Portuguese (ptBR), Russian (ruRU), Simplified Chinese (zhCN), and Traditional Chinese (zhTW) localization files with appropriate translations for all strings.
+
 ## [2.5.1] - 2026-02-11
 ### Fixed
 - Fixed nameplate event handler signature so unit tokens are passed correctly.
