@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.5.1] - 2026-02-11
+### Fixed
+- Fixed nameplate event handler signature so unit tokens are passed correctly.
+- Avoided scanning forbidden frames so `GetChildren()` is never called on restricted frames.
+
 ## [2.5.0] - 2026-02-02
 ### Added
 - **Cooldown Text Positioning:** You can now adjust the position of the main Cooldown Number (Timer).
