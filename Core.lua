@@ -213,7 +213,7 @@ function MCE:ForceUpdateAll(fullScan)
 end
 
 -- === NAMEPLATE EVENTS ===
-function MCE:NAME_PLATE_UNIT_ADDED(unit)
+function MCE:NAME_PLATE_UNIT_ADDED(event, unit)
     local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit and C_NamePlate.GetNamePlateForUnit(unit)
     if plate then
         C_Timer.After(0, function()
@@ -222,7 +222,7 @@ function MCE:NAME_PLATE_UNIT_ADDED(unit)
     end
 end
 
-function MCE:NAME_PLATE_UNIT_REMOVED(unit)
+function MCE:NAME_PLATE_UNIT_REMOVED(event, unit)
     -- Nothing required; weak tables will clean up.
 end
 
@@ -271,14 +271,14 @@ function MCE:StyleCooldownsInFrame(rootFrame, forcedCategory, maxDepth)
     local function scan(frame, depth)
         if not frame or depth > maxDepth then return end
         local safe, isForbidden = pcall(function() return frame:IsForbidden() end)
-        if safe and not isForbidden then
-            if frame.IsObjectType and frame:IsObjectType("Cooldown") then
-                self:ApplyCustomStyle(frame, forcedCategory)
-            elseif frame.cooldown and type(frame.cooldown) == "table" then
-                local safeCD, isForbiddenCD = pcall(function() return frame.cooldown:IsForbidden() end)
-                if safeCD and not isForbiddenCD then
-                    self:ApplyCustomStyle(frame.cooldown, forcedCategory)
-                end
+        if not safe or isForbidden then return end
+
+        if frame.IsObjectType and frame:IsObjectType("Cooldown") then
+            self:ApplyCustomStyle(frame, forcedCategory)
+        elseif frame.cooldown and type(frame.cooldown) == "table" then
+            local safeCD, isForbiddenCD = pcall(function() return frame.cooldown:IsForbidden() end)
+            if safeCD and not isForbiddenCD then
+                self:ApplyCustomStyle(frame.cooldown, forcedCategory)
             end
         end
 
