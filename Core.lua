@@ -9,6 +9,10 @@ local pairs, ipairs, type = pairs, ipairs, type
 local pcall, setmetatable = pcall, setmetatable
 local strfind = string.find
 local C_Timer_After = C_Timer.After
+local InCombatLockdown = InCombatLockdown
+local EnumerateFrames = EnumerateFrames
+local hooksecurefunc = hooksecurefunc
+local UIParent = UIParent
 
 -- === BLACKLIST (Hash table for O(1) lookup) ===
 local BLACKLIST_KEYS = {
@@ -20,6 +24,9 @@ local BLACKLIST_KEYS = {
 local categoryCache   = setmetatable({}, { __mode = "k" })
 local trackedCooldowns = setmetatable({}, { __mode = "k" })
 local pendingAuraRetries = setmetatable({}, { __mode = "k" })
+local pendingGlobalDefer = setmetatable({}, { __mode = "k" })
+
+local hooksInstalled = false
 
 -- === SAFE FORBIDDEN CHECK ===
 -- Must use a closure inside pcall because indexing a "secret table"
@@ -28,6 +35,14 @@ local function IsForbiddenFrame(frame)
     if not frame then return true end
     local ok, forbidden = pcall(function() return frame:IsForbidden() end)
     return not ok or forbidden
+end
+
+local function IsNameplateContext(name, objType, unit)
+    return objType == "NamePlate"
+        or strfind(name, "NamePlate", 1, true)
+        or strfind(name, "Plater", 1, true)
+        or strfind(name, "Kui", 1, true)
+        or (unit and strfind(unit, "nameplate", 1, true))
 end
 
 -- === FONT STYLE NORMALIZER ===
@@ -51,9 +66,31 @@ end
 
 function MCE:OnEnable()
     self:SetupHooks()
-    self:RegisterEvent("PLAYER_REGEN_DISABLED")
-    self:RegisterEvent("PLAYER_REGEN_ENABLED")
+
+    if C_NamePlate and C_NamePlate.GetNamePlateForUnit then
+        self:RegisterEvent("NAME_PLATE_UNIT_ADDED")
+        self:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
+        self:RegisterEvent("PLAYER_REGEN_DISABLED")
+        self:RegisterEvent("PLAYER_REGEN_ENABLED")
+
+        if InCombatLockdown() then
+            self:PLAYER_REGEN_DISABLED()
+        end
+    end
+
     C_Timer_After(2, function() self:ForceUpdateAll(true) end)
+end
+
+function MCE:OnDisable()
+    if self.nameplateTicker then
+        self.nameplateTicker:Cancel()
+        self.nameplateTicker = nil
+    end
+
+    self:UnregisterEvent("NAME_PLATE_UNIT_ADDED")
+    self:UnregisterEvent("NAME_PLATE_UNIT_REMOVED")
+    self:UnregisterEvent("PLAYER_REGEN_DISABLED")
+    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
 end
 
 function MCE:SlashCommand(_)
@@ -82,11 +119,7 @@ local function IsNameplateChain(frame, maxDepth)
         local name = current:GetName() or ""
         local objType = current:GetObjectType()
 
-        if objType == "NamePlate"
-        or strfind(name, "NamePlate", 1, true)
-        or strfind(name, "Plater", 1, true)
-        or strfind(name, "Kui", 1, true)
-        or (current.unit and strfind(current.unit, "nameplate", 1, true)) then
+        if IsNameplateContext(name, objType, current.unit) then
             return true
         end
 
@@ -123,11 +156,7 @@ function MCE:GetCooldownCategory(cooldownFrame)
         while probe and probe ~= UIParent and probeDepth < maxDepth do
             local probeName = probe:GetName() or ""
             local probeType = probe:GetObjectType()
-            if probeType == "NamePlate"
-            or strfind(probeName, "NamePlate", 1, true)
-            or strfind(probeName, "Plater", 1, true)
-            or strfind(probeName, "Kui", 1, true)
-            or (probe.unit and strfind(probe.unit, "nameplate", 1, true)) then
+            if IsNameplateContext(probeName, probeType, probe.unit) then
                 categoryCache[cooldownFrame] = "nameplate"
                 return "nameplate"
             end
@@ -153,11 +182,7 @@ function MCE:GetCooldownCategory(cooldownFrame)
         end
 
         -- Nameplate detection
-        if objType == "NamePlate"
-        or strfind(name, "NamePlate", 1, true)
-        or strfind(name, "Plater", 1, true)
-        or strfind(name, "Kui", 1, true)
-        or (current.unit and strfind(current.unit, "nameplate", 1, true)) then
+        if IsNameplateContext(name, objType, current.unit) then
             result = "nameplate"
             break
         end
@@ -227,6 +252,7 @@ function MCE:ApplyCustomStyle(cdFrame, forcedCategory)
 
     if forcedCategory and forcedCategory ~= "global" then
         categoryCache[cdFrame] = forcedCategory
+        pendingGlobalDefer[cdFrame] = nil
     end
 
     -- Guard: DB must be ready
@@ -248,6 +274,22 @@ function MCE:ApplyCustomStyle(cdFrame, forcedCategory)
         category = "global"
     else
         pendingAuraRetries[cdFrame] = nil
+    end
+
+    -- Defer "global" styling one frame to avoid flicker on nameplates
+    -- whose hierarchy has not finished attaching when the hook fires.
+    if category == "global" and not forcedCategory then
+        if not pendingGlobalDefer[cdFrame] then
+            pendingGlobalDefer[cdFrame] = true
+            C_Timer_After(0, function()
+                pendingGlobalDefer[cdFrame] = nil
+                if cdFrame and not IsForbiddenFrame(cdFrame) and not categoryCache[cdFrame] then
+                    MCE:ApplyCustomStyle(cdFrame)
+                end
+            end)
+            return
+        end
+        pendingGlobalDefer[cdFrame] = nil
     end
 
     if category == "blacklist" then return end
@@ -281,9 +323,13 @@ function MCE:ApplyCustomStyle(cdFrame, forcedCategory)
     -- Font string styling & positioning
     if not cdFrame.GetRegions then return end
 
+    local numRegions = cdFrame.GetNumRegions and cdFrame:GetNumRegions() or 0
+    if numRegions == 0 then return end
+
     local fontStyle = NormalizeFontStyle(config.fontStyle)
     local regions   = { cdFrame:GetRegions() }
-    for _, region in ipairs(regions) do
+    for i = 1, numRegions do
+        local region = regions[i]
         if region:GetObjectType() == "FontString" and not IsForbiddenFrame(region) then
             region:SetFont(config.font, config.fontSize, fontStyle)
             if config.textColor then
@@ -364,6 +410,9 @@ end
 
 -- === HOOKS ===
 function MCE:SetupHooks()
+    if hooksInstalled then return end
+    hooksInstalled = true
+
     hooksecurefunc("CooldownFrame_Set", function(f)
         MCE:ApplyCustomStyle(f)
     end)
@@ -381,14 +430,6 @@ function MCE:SetupHooks()
                 MCE:ApplyCustomStyle(cd, "actionbar")
             end
         end)
-    end
-
-    if C_NamePlate and C_NamePlate.GetNamePlateForUnit then
-        self:RegisterEvent("NAME_PLATE_UNIT_ADDED")
-        self:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
-        if InCombatLockdown() then
-            self:PLAYER_REGEN_DISABLED()
-        end
     end
 
     -- LibActionButton support (Bartender4, etc.)
@@ -419,9 +460,11 @@ function MCE:StyleCooldownsInFrame(rootFrame, forcedCategory, maxDepth)
             end
         end
 
-        if frame.GetChildren then
-            for _, child in ipairs({ frame:GetChildren() }) do
-                scan(child, depth + 1)
+        local childCount = frame.GetNumChildren and frame:GetNumChildren() or 0
+        if childCount > 0 and frame.GetChildren then
+            local children = { frame:GetChildren() }
+            for i = 1, childCount do
+                scan(children[i], depth + 1)
             end
         end
     end
