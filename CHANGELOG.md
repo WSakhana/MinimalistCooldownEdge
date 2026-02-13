@@ -1,5 +1,9 @@
 # Changelog
 
+## [2.8.1] - 2026-02-13
+### Fixed
+- **Cooldown Edge Timing:** Fixed a deferred global styling loop that could delay edge reappearance after casting a spell.
+
 ## [2.8.0] - 2026-02-13
 ### Improved
 - **Refactor:** Consolidated repeated nameplate detection checks into a shared helper to reduce duplication and improve maintainability.

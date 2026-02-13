@@ -1,6 +1,6 @@
 -- Core.lua - Main functionality using Ace3
 
-local addonName, addon = ...
+local _, addon = ...
 local MCE = LibStub("AceAddon-3.0"):NewAddon(addon, "MinimalistCooldownEdge", "AceConsole-3.0", "AceEvent-3.0", "AceHook-3.0")
 local L = LibStub("AceLocale-3.0"):GetLocale("MinimalistCooldownEdge")
 
@@ -25,6 +25,7 @@ local categoryCache   = setmetatable({}, { __mode = "k" })
 local trackedCooldowns = setmetatable({}, { __mode = "k" })
 local pendingAuraRetries = setmetatable({}, { __mode = "k" })
 local pendingGlobalDefer = setmetatable({}, { __mode = "k" })
+local globalDeferDone = setmetatable({}, { __mode = "k" })
 
 local hooksInstalled = false
 
@@ -245,7 +246,7 @@ function MCE:StyleStackCount(cooldownFrame, config, category)
 end
 
 -- === STYLE APPLICATION ===
-function MCE:ApplyCustomStyle(cdFrame, forcedCategory)
+function MCE:ApplyCustomStyle(cdFrame, forcedCategory, skipGlobalDefer)
     if IsForbiddenFrame(cdFrame) then return end
 
     trackedCooldowns[cdFrame] = true
@@ -278,13 +279,14 @@ function MCE:ApplyCustomStyle(cdFrame, forcedCategory)
 
     -- Defer "global" styling one frame to avoid flicker on nameplates
     -- whose hierarchy has not finished attaching when the hook fires.
-    if category == "global" and not forcedCategory then
+    if category == "global" and not forcedCategory and not skipGlobalDefer and not globalDeferDone[cdFrame] then
         if not pendingGlobalDefer[cdFrame] then
             pendingGlobalDefer[cdFrame] = true
             C_Timer_After(0, function()
                 pendingGlobalDefer[cdFrame] = nil
+                globalDeferDone[cdFrame] = true
                 if cdFrame and not IsForbiddenFrame(cdFrame) and not categoryCache[cdFrame] then
-                    MCE:ApplyCustomStyle(cdFrame)
+                    MCE:ApplyCustomStyle(cdFrame, nil, true)
                 end
             end)
             return
@@ -307,12 +309,10 @@ function MCE:ApplyCustomStyle(cdFrame, forcedCategory)
 
     -- Edge glow
     if cdFrame.SetDrawEdge then
-        pcall(function()
-            cdFrame:SetDrawEdge(config.edgeEnabled)
-            if config.edgeEnabled and cdFrame.SetEdgeScale then
-                cdFrame:SetEdgeScale(config.edgeScale)
-            end
-        end)
+        pcall(cdFrame.SetDrawEdge, cdFrame, config.edgeEnabled)
+        if config.edgeEnabled and cdFrame.SetEdgeScale then
+            pcall(cdFrame.SetEdgeScale, cdFrame, config.edgeScale)
+        end
     end
 
     -- Hide/show countdown numbers
