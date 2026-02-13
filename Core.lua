@@ -19,6 +19,7 @@ local BLACKLIST_KEYS = {
 -- === CACHES (Weak-keyed to auto-collect garbage) ===
 local categoryCache   = setmetatable({}, { __mode = "k" })
 local trackedCooldowns = setmetatable({}, { __mode = "k" })
+local pendingAuraRetries = setmetatable({}, { __mode = "k" })
 
 -- === SAFE FORBIDDEN CHECK ===
 -- Must use a closure inside pcall because indexing a "secret table"
@@ -50,6 +51,8 @@ end
 
 function MCE:OnEnable()
     self:SetupHooks()
+    self:RegisterEvent("PLAYER_REGEN_DISABLED")
+    self:RegisterEvent("PLAYER_REGEN_ENABLED")
     C_Timer_After(2, function() self:ForceUpdateAll(true) end)
 end
 
@@ -70,25 +73,70 @@ local function IsBlacklisted(name)
     return false
 end
 
+local function IsNameplateChain(frame, maxDepth)
+    local current = frame
+    local depth = 0
+    maxDepth = maxDepth or 40
+
+    while current and current ~= UIParent and depth < maxDepth do
+        local name = current:GetName() or ""
+        local objType = current:GetObjectType()
+
+        if objType == "NamePlate"
+        or strfind(name, "NamePlate", 1, true)
+        or strfind(name, "Plater", 1, true)
+        or strfind(name, "Kui", 1, true)
+        or (current.unit and strfind(current.unit, "nameplate", 1, true)) then
+            return true
+        end
+
+        current = current:GetParent()
+        depth = depth + 1
+    end
+
+    return false
+end
+
 function MCE:GetCooldownCategory(cooldownFrame)
     local cached = categoryCache[cooldownFrame]
     if cached then return cached end
 
     local current = cooldownFrame:GetParent()
     if not current then
-        categoryCache[cooldownFrame] = "global"
         return "global"
     end
 
     local maxDepth = (self.db and self.db.profile and self.db.profile.scanDepth) or 10
+
+    if IsNameplateChain(current, maxDepth + 30) then
+        categoryCache[cooldownFrame] = "nameplate"
+        return "nameplate"
+    end
 
     -- Fast early-out for aura buttons
     local parentName = current:GetName() or ""
     if strfind(parentName, "BuffButton", 1, true)
     or strfind(parentName, "DebuffButton", 1, true)
     or strfind(parentName, "TempEnchant", 1, true) then
-        categoryCache[cooldownFrame] = "global"
-        return "global"
+        local probe = current
+        local probeDepth = 0
+        while probe and probe ~= UIParent and probeDepth < maxDepth do
+            local probeName = probe:GetName() or ""
+            local probeType = probe:GetObjectType()
+            if probeType == "NamePlate"
+            or strfind(probeName, "NamePlate", 1, true)
+            or strfind(probeName, "Plater", 1, true)
+            or strfind(probeName, "Kui", 1, true)
+            or (probe.unit and strfind(probe.unit, "nameplate", 1, true)) then
+                categoryCache[cooldownFrame] = "nameplate"
+                return "nameplate"
+            end
+            probe = probe:GetParent()
+            probeDepth = probeDepth + 1
+        end
+
+        -- Defer classification briefly; some aura frames finish parenting a moment later.
+        return "aura_pending"
     end
 
     local result = "global"
@@ -141,7 +189,9 @@ function MCE:GetCooldownCategory(cooldownFrame)
         depth = depth + 1
     end
 
-    categoryCache[cooldownFrame] = result
+    if result ~= "global" then
+        categoryCache[cooldownFrame] = result
+    end
     return result
 end
 
@@ -175,10 +225,31 @@ function MCE:ApplyCustomStyle(cdFrame, forcedCategory)
 
     trackedCooldowns[cdFrame] = true
 
+    if forcedCategory and forcedCategory ~= "global" then
+        categoryCache[cdFrame] = forcedCategory
+    end
+
     -- Guard: DB must be ready
     if not self.db or not self.db.profile or not self.db.profile.categories then return end
 
     local category = forcedCategory or self:GetCooldownCategory(cdFrame)
+    if category == "aura_pending" then
+        local retries = pendingAuraRetries[cdFrame] or 0
+        if retries < 4 then
+            pendingAuraRetries[cdFrame] = retries + 1
+            C_Timer_After(0.05, function()
+                if cdFrame and not IsForbiddenFrame(cdFrame) then
+                    MCE:ApplyCustomStyle(cdFrame)
+                end
+            end)
+            return
+        end
+        pendingAuraRetries[cdFrame] = nil
+        category = "global"
+    else
+        pendingAuraRetries[cdFrame] = nil
+    end
+
     if category == "blacklist" then return end
 
     local config = self.db.profile.categories[category]
@@ -259,7 +330,8 @@ end
 function MCE:NAME_PLATE_UNIT_ADDED(_, unit)
     local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit(unit)
     if plate then
-        C_Timer_After(0, function() self:StyleCooldownsInFrame(plate, "nameplate", 6) end)
+        C_Timer_After(0, function() self:StyleCooldownsInFrame(plate, "nameplate", 10) end)
+        C_Timer_After(0.12, function() self:StyleCooldownsInFrame(plate, "nameplate", 10) end)
     end
 end
 
@@ -267,15 +339,38 @@ function MCE:NAME_PLATE_UNIT_REMOVED()
     -- Weak tables handle cleanup automatically.
 end
 
+function MCE:RefreshVisibleNameplates()
+    if not (C_NamePlate and C_NamePlate.GetNamePlates) then return end
+    for _, plate in ipairs(C_NamePlate.GetNamePlates() or {}) do
+        if plate and not IsForbiddenFrame(plate) then
+            self:StyleCooldownsInFrame(plate, "nameplate", 10)
+        end
+    end
+end
+
+function MCE:PLAYER_REGEN_DISABLED()
+    if self.nameplateTicker then return end
+    self.nameplateTicker = C_Timer.NewTicker(0.35, function()
+        self:RefreshVisibleNameplates()
+    end)
+end
+
+function MCE:PLAYER_REGEN_ENABLED()
+    if self.nameplateTicker then
+        self.nameplateTicker:Cancel()
+        self.nameplateTicker = nil
+    end
+end
+
 -- === HOOKS ===
 function MCE:SetupHooks()
     hooksecurefunc("CooldownFrame_Set", function(f)
-        C_Timer_After(0, function() MCE:ApplyCustomStyle(f) end)
+        MCE:ApplyCustomStyle(f)
     end)
 
     if CooldownFrame_SetTimer then
         hooksecurefunc("CooldownFrame_SetTimer", function(f)
-            C_Timer_After(0, function() MCE:ApplyCustomStyle(f) end)
+            MCE:ApplyCustomStyle(f)
         end)
     end
 
@@ -283,7 +378,7 @@ function MCE:SetupHooks()
         hooksecurefunc("ActionButton_UpdateCooldown", function(button)
             local cd = button and (button.cooldown or button.Cooldown)
             if cd then
-                C_Timer_After(0, function() MCE:ApplyCustomStyle(cd, "actionbar") end)
+                MCE:ApplyCustomStyle(cd, "actionbar")
             end
         end)
     end
@@ -291,17 +386,18 @@ function MCE:SetupHooks()
     if C_NamePlate and C_NamePlate.GetNamePlateForUnit then
         self:RegisterEvent("NAME_PLATE_UNIT_ADDED")
         self:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
+        if InCombatLockdown() then
+            self:PLAYER_REGEN_DISABLED()
+        end
     end
 
     -- LibActionButton support (Bartender4, etc.)
     local LAB = LibStub("LibActionButton-1.0", true)
     if LAB then
         LAB:RegisterCallback("OnButtonUpdate", function(_, button)
-            C_Timer_After(0, function()
-                if button and button.cooldown then
-                    MCE:ApplyCustomStyle(button.cooldown, "actionbar")
-                end
-            end)
+            if button and button.cooldown then
+                MCE:ApplyCustomStyle(button.cooldown, "actionbar")
+            end
         end)
     end
 end
