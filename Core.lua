@@ -20,6 +20,7 @@ MinimalistCooldownEdge_DebugLog = MinimalistCooldownEdge_DebugLog or {}
 
 -- Cache de session pour éviter de spammer le fichier d'écriture à chaque frame (performance)
 local sessionLogCache = {}
+local IsBlacklistedFrame
 
 function MCE:DebugPrint(message)
     if not (self.db and self.db.profile and self.db.profile.debugMode) then return end
@@ -29,6 +30,7 @@ end
 function MCE:LogStyleApplication(frame, category, success)
     if not frame then return end
     if not (self.db and self.db.profile and self.db.profile.debugMode) then return end
+    if IsBlacklistedFrame(frame) then return end
 
     -- On crée un identifiant unique pour la frame
     local frameName = frame:GetName() or "AnonymousFrame"
@@ -54,10 +56,38 @@ function MCE:LogStyleApplication(frame, category, success)
     }
 end
 
--- === BLACKLIST (Hash table for O(1) lookup) ===
-local BLACKLIST_KEYS = {
-    Glider = true, Party = true, Compact = true,
-    Raid = true, VuhDo = true, Grid = true,
+-- === BLACKLIST (Centralized frame matcher) ===
+-- Add your ignore cases here.
+local BLACKLIST_NAME_CONTAINS = {
+    "Glider", "Party", "Compact",
+    "Raid", "VuhDo", "Grid",
+    "LossOfControlFrame",
+    "ContainerFrameCombinedBagsCooldown",
+}
+
+-- Exact relation keys: "ParentName -> FrameName"
+local BLACKLIST_EXACT_PAIRS = {
+    ["NoParent -> AnonymousFrame"] = true,
+    
+    -- Character Slots
+    ["CharacterBackSlot -> CharacterBackSlotCooldown"] = true,
+    ["CharacterShirtSlot -> CharacterShirtSlotCooldown"] = true,
+    ["CharacterMainHandSlot -> CharacterMainHandSlotCooldown"] = true,
+    ["CharacterLegsSlot -> CharacterLegsSlotCooldown"] = true,
+    ["CharacterFinger0Slot -> CharacterFinger0SlotCooldown"] = true,
+    ["CharacterHeadSlot -> CharacterHeadSlotCooldown"] = true,
+    ["CharacterFeetSlot -> CharacterFeetSlotCooldown"] = true,
+    ["CharacterShoulderSlot -> CharacterShoulderSlotCooldown"] = true,
+    ["CharacterWristSlot -> CharacterWristSlotCooldown"] = true,
+    ["CharacterHandsSlot -> CharacterHandsSlotCooldown"] = true,
+    ["CharacterTabardSlot -> CharacterTabardSlotCooldown"] = true,
+    ["CharacterSecondaryHandSlot -> CharacterSecondaryHandSlotCooldown"] = true,
+    ["CharacterFinger1Slot -> CharacterFinger1SlotCooldown"] = true,
+    ["CharacterWaistSlot -> CharacterWaistSlotCooldown"] = true,
+    ["CharacterChestSlot -> CharacterChestSlotCooldown"] = true,
+    ["CharacterNeckSlot -> CharacterNeckSlotCooldown"] = true,
+    ["CharacterTrinket1Slot -> CharacterTrinket1SlotCooldown"] = true,
+    ["CharacterTrinket0Slot -> CharacterTrinket0SlotCooldown"] = true,
 }
 
 -- === CACHES (Weak-keyed to auto-collect garbage) ===
@@ -76,6 +106,26 @@ local function IsForbiddenFrame(frame)
     if not frame then return true end
     local ok, forbidden = pcall(function() return frame:IsForbidden() end)
     return not ok or forbidden
+end
+
+IsBlacklistedFrame = function(frame, knownFrameName)
+    if not frame then return false end
+
+    local frameName = knownFrameName or (frame.GetName and frame:GetName()) or "AnonymousFrame"
+    local parent = frame.GetParent and frame:GetParent() or nil
+    local parentName = parent and parent.GetName and parent:GetName() or "NoParent"
+
+    if BLACKLIST_EXACT_PAIRS[parentName .. " -> " .. frameName] then
+        return true
+    end
+
+    for _, key in ipairs(BLACKLIST_NAME_CONTAINS) do
+        if strfind(frameName, key, 1, true) or strfind(parentName, key, 1, true) then
+            return true
+        end
+    end
+
+    return false
 end
 
 local function IsNameplateContext(name, objType, unit)
@@ -177,14 +227,6 @@ function MCE:PLAYER_ENTERING_WORLD(_, isInitialLogin, isReloadingUi)
 end
 
 -- === DETECTION LOGIC ===
--- Checks name against the blacklist hash table.
-local function IsBlacklisted(name)
-    for key in pairs(BLACKLIST_KEYS) do
-        if strfind(name, key, 1, true) then return true end
-    end
-    return false
-end
-
 local function IsNameplateChain(frame, maxDepth)
     local current = frame
     local depth = 0
@@ -250,8 +292,8 @@ function MCE:GetCooldownCategory(cooldownFrame)
         local name    = current:GetName() or ""
         local objType = current:GetObjectType()
 
-        -- Blacklist check (O(n) on small hash, uses plain find)
-        if IsBlacklisted(name) then
+        -- Blacklist check (exact pair + contains patterns)
+        if IsBlacklistedFrame(current, name) then
             categoryCache[cooldownFrame] = "blacklist"
             return "blacklist"
         end
@@ -322,6 +364,7 @@ end
 -- === STYLE APPLICATION ===
 function MCE:ApplyCustomStyle(cdFrame, forcedCategory, skipGlobalDefer)
     if IsForbiddenFrame(cdFrame) then return end
+    if IsBlacklistedFrame(cdFrame) then return end
 
     trackedCooldowns[cdFrame] = true
 
