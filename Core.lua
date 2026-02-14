@@ -14,6 +14,46 @@ local EnumerateFrames = EnumerateFrames
 local hooksecurefunc = hooksecurefunc
 local UIParent = UIParent
 
+-- === DEBUG / LOGGING SYSTEM ===
+-- Initialisation de la table globale si elle n'existe pas
+MinimalistCooldownEdge_DebugLog = MinimalistCooldownEdge_DebugLog or {}
+
+-- Cache de session pour éviter de spammer le fichier d'écriture à chaque frame (performance)
+local sessionLogCache = {}
+
+function MCE:DebugPrint(message)
+    if not (self.db and self.db.profile and self.db.profile.debugMode) then return end
+    self:Print("|cffffaa00[Debug]|r " .. tostring(message))
+end
+
+function MCE:LogStyleApplication(frame, category, success)
+    if not frame then return end
+    if not (self.db and self.db.profile and self.db.profile.debugMode) then return end
+
+    -- On crée un identifiant unique pour la frame
+    local frameName = frame:GetName() or "AnonymousFrame"
+    local parent = frame:GetParent()
+    local parentName = parent and parent:GetName() or "NoParent"
+    
+    -- Clé unique : Parent -> Frame
+    local key = parentName .. " -> " .. frameName
+    
+    -- Si on a déjà logué cette frame dans cette session, on ignore (pour ne pas tuer les FPS)
+    if sessionLogCache[key] then return end
+    sessionLogCache[key] = true
+
+    -- Enregistrement dans la variable sauvegardée
+    MinimalistCooldownEdge_DebugLog[key] = {
+        frameName = frameName,
+        parentName = parentName,
+        category = category,
+        objType = frame:GetObjectType(),
+        timestamp = date("%Y-%m-%d %H:%M:%S"),
+        success = success, -- Est-ce que le style a été appliqué ou bloqué ?
+        scanDepth = MCE.db and MCE.db.profile and MCE.db.profile.scanDepth or nil -- Pour voir si la profondeur influe
+    }
+end
+
 -- === BLACKLIST (Hash table for O(1) lookup) ===
 local BLACKLIST_KEYS = {
     Glider = true, Party = true, Compact = true,
@@ -63,10 +103,14 @@ function MCE:OnInitialize()
     self:RegisterChatCommand("mce", "SlashCommand")
     self:RegisterChatCommand("minice", "SlashCommand")
     self:RegisterChatCommand("minimalistcooldownedge", "SlashCommand")
+
+    self:DebugPrint("Addon initialized.")
 end
 
 function MCE:OnEnable()
     self:SetupHooks()
+    self:RegisterEvent("PLAYER_ENTERING_WORLD")
+    self:DebugPrint("Addon enabled.")
 
     if C_NamePlate and C_NamePlate.GetNamePlateForUnit then
         self:RegisterEvent("NAME_PLATE_UNIT_ADDED")
@@ -79,7 +123,10 @@ function MCE:OnEnable()
         end
     end
 
-    C_Timer_After(2, function() self:ForceUpdateAll(true) end)
+    C_Timer_After(2, function()
+        self:DebugPrint("Initial full scan scheduled on enable.")
+        self:ForceUpdateAll(true)
+    end)
 end
 
 function MCE:OnDisable()
@@ -92,14 +139,41 @@ function MCE:OnDisable()
     self:UnregisterEvent("NAME_PLATE_UNIT_REMOVED")
     self:UnregisterEvent("PLAYER_REGEN_DISABLED")
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+    self:DebugPrint("Addon disabled.")
 end
 
-function MCE:SlashCommand(_)
+function MCE:SlashCommand(input)
+    local cmd = input and input:match("^%s*(%S+)")
+    if cmd and cmd:lower() == "debug" then
+        if not (self.db and self.db.profile) then return end
+
+        self.db.profile.debugMode = not self.db.profile.debugMode
+
+        if self.db.profile.debugMode then
+            self:Print("Debug mode enabled.")
+            self:DebugPrint("Debug logging active.")
+        else
+            self:Print("Debug mode disabled.")
+        end
+        return
+    end
+
     if InCombatLockdown() then
         self:Print(L["Cannot open options in combat."])
         return
     end
     LibStub("AceConfigDialog-3.0"):Open("MinimalistCooldownEdge")
+end
+
+function MCE:PLAYER_ENTERING_WORLD(_, isInitialLogin, isReloadingUi)
+    if isInitialLogin then
+        self:DebugPrint("PLAYER_ENTERING_WORLD (initial login).")
+    elseif isReloadingUi then
+        self:DebugPrint("PLAYER_ENTERING_WORLD (UI reload).")
+    else
+        self:DebugPrint("PLAYER_ENTERING_WORLD (zone/world transition).")
+    end
 end
 
 -- === DETECTION LOGIC ===
@@ -260,6 +334,10 @@ function MCE:ApplyCustomStyle(cdFrame, forcedCategory, skipGlobalDefer)
     if not self.db or not self.db.profile or not self.db.profile.categories then return end
 
     local category = forcedCategory or self:GetCooldownCategory(cdFrame)
+
+    -- Loguer la frame avant le traitement des cas spéciaux
+    -- On loguera plus bas si le style est réellement appliqué, mais ici on capture la catégorie détectée
+
     if category == "aura_pending" then
         local retries = pendingAuraRetries[cdFrame] or 0
         if retries < 4 then
@@ -294,15 +372,24 @@ function MCE:ApplyCustomStyle(cdFrame, forcedCategory, skipGlobalDefer)
         pendingGlobalDefer[cdFrame] = nil
     end
 
-    if category == "blacklist" then return end
+    if category == "blacklist" then 
+        -- Optionnel : loguer les frames blacklistées
+        self:LogStyleApplication(cdFrame, "blacklist", false)
+        return 
+    end
 
     local config = self.db.profile.categories[category]
     if not config or not config.enabled then
         if cdFrame.SetDrawEdge then
             pcall(cdFrame.SetDrawEdge, cdFrame, false)
         end
+        -- Loguer que c'est désactivé
+        self:LogStyleApplication(cdFrame, category .. " (Disabled)", false)
         return
     end
+
+    -- C'est ici que l'application réelle commence
+    self:LogStyleApplication(cdFrame, category, true)
 
     -- Stack counts (action bar only)
     self:StyleStackCount(cdFrame, config, category)
@@ -346,6 +433,8 @@ end
 
 -- === FORCE UPDATE ===
 function MCE:ForceUpdateAll(fullScan)
+    self:DebugPrint("ForceUpdateAll called (fullScan=" .. tostring(fullScan) .. ").")
+
     if fullScan or not self.fullScanDone then
         self.fullScanDone = true
         local frame = EnumerateFrames()
@@ -387,6 +476,7 @@ end
 
 function MCE:RefreshVisibleNameplates()
     if not (C_NamePlate and C_NamePlate.GetNamePlates) then return end
+
     for _, plate in ipairs(C_NamePlate.GetNamePlates() or {}) do
         if plate and not IsForbiddenFrame(plate) then
             self:StyleCooldownsInFrame(plate, "nameplate", 10)
@@ -396,6 +486,7 @@ end
 
 function MCE:PLAYER_REGEN_DISABLED()
     if self.nameplateTicker then return end
+    
     self.nameplateTicker = C_Timer.NewTicker(0.35, function()
         self:RefreshVisibleNameplates()
     end)
