@@ -67,8 +67,6 @@ local BLACKLIST_NAME_CONTAINS = {
 
 -- Exact relation keys: "ParentName -> FrameName"
 local BLACKLIST_EXACT_PAIRS = {
-    ["NoParent -> AnonymousFrame"] = true,
-    
     -- Character Slots
     ["CharacterBackSlot -> CharacterBackSlotCooldown"] = true,
     ["CharacterShirtSlot -> CharacterShirtSlotCooldown"] = true,
