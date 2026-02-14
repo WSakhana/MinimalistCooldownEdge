@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.8.2] - 2026-02-14
+### Added
+- Debug logging system
+### Improved
+- Centralized and extended blacklist logic for frame exclusion.
+
 ## [2.8.1] - 2026-02-13
 ### Fixed
 - **Cooldown Edge Timing:** Fixed a deferred global styling loop that could delay edge reappearance after casting a spell.
