@@ -15,6 +15,9 @@ local hooksecurefunc = hooksecurefunc
 local UIParent = UIParent
 local GetTime = GetTime
 
+-- === CONSTANTS ===
+local SCAN_DEPTH = 10  -- Ancestry levels scanned for frame classification (covers all known addon UIs)
+
 -- === DEBUG / LOGGING SYSTEM ===
 -- Initialisation de la table globale si elle n'existe pas
 MinimalistCooldownEdge_DebugLog = MinimalistCooldownEdge_DebugLog or {}
@@ -52,8 +55,7 @@ function MCE:LogStyleApplication(frame, category, success)
         category = category,
         objType = frame:GetObjectType(),
         timestamp = date("%Y-%m-%d %H:%M:%S"),
-        success = success, -- Est-ce que le style a été appliqué ou bloqué ?
-        scanDepth = MCE.db and MCE.db.profile and MCE.db.profile.scanDepth or nil -- Pour voir si la profondeur influe
+        success = success,
     }
 end
 
@@ -294,8 +296,8 @@ function MCE:ClassifyFrame(cooldownFrame)
     local current = cooldownFrame:GetParent()
     if not current then return "global" end
 
-    local maxDepth = (self.db and self.db.profile and self.db.profile.scanDepth) or 10
-    local extendedLimit = maxDepth + 30
+    local maxDepth = SCAN_DEPTH
+    local extendedLimit = SCAN_DEPTH + 30
 
     -- Phase 1: Build ancestry chain once (single allocation, reused for all checks)
     local chain = {}

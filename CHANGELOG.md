@@ -1,5 +1,9 @@
 # Changelog
 
+## [2.9.1] - 2026-02-19
+### Changed
+- Consolidate scan depth constant and remove redundant options from settings
+
 ## [2.9.0] - 2026-02-19
 ### Fixed
 - **Flickering / Keeps Flashing:** Cooldown frames no longer flicker or flash when abilities are used.

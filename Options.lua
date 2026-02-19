@@ -68,7 +68,6 @@ end
 MCE.defaults = {
     profile = {
         debugMode = false,
-        scanDepth = 10,
         categories = {
             actionbar = GetCategoryDefaults(true,  18),
             nameplate = GetCategoryDefaults(false, 12),
@@ -368,52 +367,6 @@ function MCE:GetOptions()
                                         L["Unit Frames"], s(cats.unitframe.enabled),
                                         L["CD Manager & Others"], s(cats.global.enabled)
                                     )
-                                end,
-                            },
-                        },
-                    },
-                    perfGroup = {
-                        type = "group", name = L["Performance & Detection"],
-                        inline = true, order = 2,
-                        args = {
-                            scanDepth = {
-                                type = "range", order = 1, width = "double",
-                                name = L["Scan Depth"],
-                                desc = L["How deep the addon looks into UI frames to find cooldowns."],
-                                min = 1, max = 20, step = 1,
-                                get = function() return MCE.db.profile.scanDepth end,
-                                set = function(_, val)
-                                    MCE.db.profile.scanDepth = val
-                                    print("|cff00ff00MCE:|r " .. L["Global Scan Depth changed. A /reload is recommended."])
-                                end,
-                            },
-                            helpText = {
-                                type = "description", order = 2, width = "full",
-                                name = L["SCAN_DEPTH_HELP"],
-                            },
-                        },
-                    },
-                    -- ── Tools ────────────────────────────────────────────
-                    toolsGroup = {
-                        type = "group", name = L["Tools"],
-                        inline = true, order = 2.5,
-                        args = {
-                            forceRefresh = {
-                                type = "execute", order = 1, width = 1.2,
-                                name = L["Force Refresh"],
-                                desc = L["Force a full rescan of all cooldown frames."],
-                                func = function()
-                                    MCE:ForceUpdateAll(true)
-                                    print("|cff00ccffMCE:|r " .. L["Full refresh completed."])
-                                end,
-                            },
-                            clearDebugLog = {
-                                type = "execute", order = 2, width = 1.2,
-                                name = L["Clear Debug Log"],
-                                desc = L["Clears the saved debug log data."],
-                                func = function()
-                                    wipe(MinimalistCooldownEdge_DebugLog or {})
-                                    print("|cff00ccffMCE:|r " .. L["Debug log cleared."])
                                 end,
                             },
                         },
