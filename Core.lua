@@ -92,8 +92,7 @@ local BLACKLIST_EXACT_PAIRS = {
 local categoryCache   = setmetatable({}, { __mode = "k" })
 local trackedCooldowns = setmetatable({}, { __mode = "k" })
 local pendingAuraRetries = setmetatable({}, { __mode = "k" })
-local pendingGlobalDefer = setmetatable({}, { __mode = "k" })
-local globalDeferDone = setmetatable({}, { __mode = "k" })
+local styledCategory = setmetatable({}, { __mode = "k" })
 
 local hooksInstalled = false
 
@@ -289,7 +288,15 @@ function MCE:GetCooldownCategory(cooldownFrame)
             probeDepth = probeDepth + 1
         end
 
-        -- Defer classification briefly; some aura frames finish parenting a moment later.
+        -- If the probe walked all the way to UIParent, the aura is definitively
+        -- a player buff/debuff (not on a nameplate). Cache and return immediately.
+        if probe == UIParent then
+            categoryCache[cooldownFrame] = "global"
+            return "global"
+        end
+
+        -- Chain is truncated (didn't reach UIParent) — hierarchy may still be
+        -- attaching to a nameplate. Defer classification.
         return "aura_pending"
     end
 
@@ -371,15 +378,17 @@ function MCE:StyleStackCount(cooldownFrame, config, category)
 end
 
 -- === STYLE APPLICATION ===
-function MCE:ApplyCustomStyle(cdFrame, forcedCategory, skipGlobalDefer)
+function MCE:ApplyCustomStyle(cdFrame, forcedCategory)
     if IsForbiddenFrame(cdFrame) then return end
     if IsBlacklistedFrame(cdFrame) then return end
 
     trackedCooldowns[cdFrame] = true
 
     if forcedCategory and forcedCategory ~= "global" then
-        categoryCache[cdFrame] = forcedCategory
-        pendingGlobalDefer[cdFrame] = nil
+        if categoryCache[cdFrame] ~= forcedCategory then
+            categoryCache[cdFrame] = forcedCategory
+            styledCategory[cdFrame] = nil
+        end
     end
 
     -- Guard: DB must be ready
@@ -407,23 +416,6 @@ function MCE:ApplyCustomStyle(cdFrame, forcedCategory, skipGlobalDefer)
         pendingAuraRetries[cdFrame] = nil
     end
 
-    -- Defer "global" styling one frame to avoid flicker on nameplates
-    -- whose hierarchy has not finished attaching when the hook fires.
-    if category == "global" and not forcedCategory and not skipGlobalDefer and not globalDeferDone[cdFrame] then
-        if not pendingGlobalDefer[cdFrame] then
-            pendingGlobalDefer[cdFrame] = true
-            C_Timer_After(0, function()
-                pendingGlobalDefer[cdFrame] = nil
-                globalDeferDone[cdFrame] = true
-                if cdFrame and not IsForbiddenFrame(cdFrame) and not categoryCache[cdFrame] then
-                    MCE:ApplyCustomStyle(cdFrame, nil, true)
-                end
-            end)
-            return
-        end
-        pendingGlobalDefer[cdFrame] = nil
-    end
-
     if category == "blacklist" then 
         -- Optionnel : loguer les frames blacklistées
         self:LogStyleApplication(cdFrame, "blacklist", false)
@@ -443,10 +435,7 @@ function MCE:ApplyCustomStyle(cdFrame, forcedCategory, skipGlobalDefer)
     -- C'est ici que l'application réelle commence
     self:LogStyleApplication(cdFrame, category, true)
 
-    -- Stack counts (action bar only)
-    self:StyleStackCount(cdFrame, config, category)
-
-    -- Edge glow
+    -- Edge glow (lightweight — always re-apply; CooldownFrame_Set may reset)
     if cdFrame.SetDrawEdge then
         pcall(cdFrame.SetDrawEdge, cdFrame, config.edgeEnabled)
         if config.edgeEnabled and cdFrame.SetEdgeScale then
@@ -458,6 +447,15 @@ function MCE:ApplyCustomStyle(cdFrame, forcedCategory, skipGlobalDefer)
     if cdFrame.SetHideCountdownNumbers then
         pcall(cdFrame.SetHideCountdownNumbers, cdFrame, config.hideCountdownNumbers)
     end
+
+    -- Skip full re-style if category unchanged (prevents cooldown text flashing)
+    if styledCategory[cdFrame] == category then
+        return
+    end
+    styledCategory[cdFrame] = category
+
+    -- Stack counts (action bar only)
+    self:StyleStackCount(cdFrame, config, category)
 
     -- Font string styling & positioning
     if not cdFrame.GetRegions then return end
@@ -487,6 +485,10 @@ end
 -- === FORCE UPDATE ===
 function MCE:ForceUpdateAll(fullScan)
     self:DebugPrint("ForceUpdateAll called (fullScan=" .. tostring(fullScan) .. ").")
+
+    -- Clear style caches so everything gets a fresh pass
+    wipe(categoryCache)
+    wipe(styledCategory)
 
     if fullScan or not self.fullScanDone then
         self.fullScanDone = true
@@ -558,12 +560,28 @@ function MCE:SetupHooks()
     hooksInstalled = true
 
     hooksecurefunc("CooldownFrame_Set", function(f)
-        MCE:ApplyCustomStyle(f)
+        if categoryCache[f] then
+            MCE:ApplyCustomStyle(f)
+        else
+            C_Timer_After(0, function()
+                if f and not IsForbiddenFrame(f) then
+                    MCE:ApplyCustomStyle(f)
+                end
+            end)
+        end
     end)
 
     if CooldownFrame_SetTimer then
         hooksecurefunc("CooldownFrame_SetTimer", function(f)
-            MCE:ApplyCustomStyle(f)
+            if categoryCache[f] then
+                MCE:ApplyCustomStyle(f)
+            else
+                C_Timer_After(0, function()
+                    if f and not IsForbiddenFrame(f) then
+                        MCE:ApplyCustomStyle(f)
+                    end
+                end)
+            end
         end)
     end
 
