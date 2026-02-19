@@ -225,7 +225,6 @@ function MCE:OnEnable()
 
     if C_NamePlate and C_NamePlate.GetNamePlateForUnit then
         self:RegisterEvent("NAME_PLATE_UNIT_ADDED")
-        self:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
         self:RegisterEvent("PLAYER_REGEN_DISABLED")
         self:RegisterEvent("PLAYER_REGEN_ENABLED")
 
@@ -247,7 +246,6 @@ function MCE:OnDisable()
     end
 
     self:UnregisterEvent("NAME_PLATE_UNIT_ADDED")
-    self:UnregisterEvent("NAME_PLATE_UNIT_REMOVED")
     self:UnregisterEvent("PLAYER_REGEN_DISABLED")
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
     self:UnregisterEvent("PLAYER_ENTERING_WORLD")
@@ -532,9 +530,6 @@ function MCE:ApplyStyle(cdFrame, forcedCategory)
     end
 end
 
--- Backward-compatible alias
-MCE.ApplyCustomStyle = MCE.ApplyStyle
-
 -- === FORCE UPDATE ===
 function MCE:ForceUpdateAll(fullScan)
     self:DebugPrint("ForceUpdateAll called (fullScan=" .. tostring(fullScan) .. ").")
@@ -585,10 +580,6 @@ function MCE:NAME_PLATE_UNIT_ADDED(_, unit)
     end
 end
 
-function MCE:NAME_PLATE_UNIT_REMOVED()
-    -- Weak tables handle cleanup automatically.
-end
-
 function MCE:RefreshVisibleNameplates()
     if not (C_NamePlate and C_NamePlate.GetNamePlates) then return end
 
@@ -629,14 +620,6 @@ function MCE:SetupHooks()
         if not f or IsForbiddenFrame(f) then return end
         QueueStyleUpdate(f)
     end)
-
-    -- Legacy hook (older API, may not exist in modern clients)
-    if CooldownFrame_SetTimer then
-        hooksecurefunc("CooldownFrame_SetTimer", function(f)
-            if not f or IsForbiddenFrame(f) then return end
-            QueueStyleUpdate(f)
-        end)
-    end
 
     -- Action button specific hook (provides forced "actionbar" category)
     if ActionButton_UpdateCooldown then
