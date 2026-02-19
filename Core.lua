@@ -5,14 +5,15 @@ local MCE = LibStub("AceAddon-3.0"):NewAddon(addon, "MinimalistCooldownEdge", "A
 local L = LibStub("AceLocale-3.0"):GetLocale("MinimalistCooldownEdge")
 
 -- === UPVALUE LOCALS (Performance) ===
-local pairs, ipairs, type = pairs, ipairs, type
-local pcall, setmetatable = pcall, setmetatable
+local pairs, ipairs, type, next = pairs, ipairs, type, next
+local pcall, setmetatable, wipe = pcall, setmetatable, wipe
 local strfind = string.find
 local C_Timer_After = C_Timer.After
 local InCombatLockdown = InCombatLockdown
 local EnumerateFrames = EnumerateFrames
 local hooksecurefunc = hooksecurefunc
 local UIParent = UIParent
+local GetTime = GetTime
 
 -- === DEBUG / LOGGING SYSTEM ===
 -- Initialisation de la table globale si elle n'existe pas
@@ -89,10 +90,20 @@ local BLACKLIST_EXACT_PAIRS = {
 }
 
 -- === CACHES (Weak-keyed to auto-collect garbage) ===
-local categoryCache   = setmetatable({}, { __mode = "k" })
-local trackedCooldowns = setmetatable({}, { __mode = "k" })
-local pendingAuraRetries = setmetatable({}, { __mode = "k" })
-local styledCategory = setmetatable({}, { __mode = "k" })
+local categoryCache     = setmetatable({}, { __mode = "k" })
+local trackedCooldowns  = setmetatable({}, { __mode = "k" })
+local styledCategory    = setmetatable({}, { __mode = "k" })
+
+-- Anti-flicker: track last-applied API values per frame to skip redundant calls
+local lastAppliedEdge      = setmetatable({}, { __mode = "k" })
+local lastAppliedEdgeScale = setmetatable({}, { __mode = "k" })
+local lastAppliedHideNums  = setmetatable({}, { __mode = "k" })
+
+-- Batched style queue: coalesces rapid hook fires within the same frame
+-- into a single style-application pass, eliminating visual flickering.
+local dirtyFrames = {}
+local dirtyCount = 0
+local batchTimerScheduled = false
 
 local hooksInstalled = false
 
@@ -144,10 +155,53 @@ end
 -- Resolves font paths; handles "GAMEDEFAULT" by using WoW's native font.
 local function ResolveFontPath(fontPath)
     if fontPath == "GAMEDEFAULT" then
-        -- Get the game's default font (respects locale)
         return GameFontNormal:GetFont()
     end
     return fontPath
+end
+
+-- === BATCHED STYLE PROCESSOR ===
+-- Coalesces multiple hook fires within the same frame into a single
+-- style-application pass, preventing visual flickering caused by
+-- rapid sequential SetDrawEdge / SetFont / SetHideCountdownNumbers calls.
+local function ProcessDirtyFrames()
+    batchTimerScheduled = false
+    if dirtyCount == 0 then return end
+
+    for frame, forcedCategory in pairs(dirtyFrames) do
+        if frame and not IsForbiddenFrame(frame) then
+            MCE:ApplyStyle(frame, forcedCategory ~= true and forcedCategory or nil)
+        end
+    end
+
+    wipe(dirtyFrames)
+    dirtyCount = 0
+end
+
+local function QueueStyleUpdate(frame, forcedCategory)
+    if not frame or IsForbiddenFrame(frame) then return end
+    if IsBlacklistedFrame(frame) then return end
+
+    lastAppliedEdge[frame] = nil
+    lastAppliedEdgeScale[frame] = nil
+    lastAppliedHideNums[frame] = nil
+
+    if categoryCache[frame] then
+        MCE:ApplyStyle(frame, forcedCategory)
+        return
+    end
+
+    -- Unknown frames: defer to batch processor for classification.
+    -- No existing style to flicker since they haven't been styled yet.
+    if not dirtyFrames[frame] then
+        dirtyCount = dirtyCount + 1
+    end
+    dirtyFrames[frame] = forcedCategory or true
+
+    if not batchTimerScheduled then
+        batchTimerScheduled = true
+        C_Timer_After(0, ProcessDirtyFrames)
+    end
 end
 
 -- === ACE ADDON LIFECYCLE ===
@@ -234,90 +288,59 @@ function MCE:PLAYER_ENTERING_WORLD(_, isInitialLogin, isReloadingUi)
 end
 
 -- === DETECTION LOGIC ===
-local function IsNameplateChain(frame, maxDepth)
-    local current = frame
-    local depth = 0
-    maxDepth = maxDepth or 40
-
-    while current and current ~= UIParent and depth < maxDepth do
-        local name = current:GetName() or ""
-        local objType = current:GetObjectType()
-
-        if IsNameplateContext(name, objType, current.unit) then
-            return true
-        end
-
-        current = current:GetParent()
-        depth = depth + 1
-    end
-
-    return false
-end
-
-function MCE:GetCooldownCategory(cooldownFrame)
-    local cached = categoryCache[cooldownFrame]
-    if cached then return cached end
-
+-- Single-pass frame classifier. Builds the ancestry chain once, then
+-- classifies by scanning through it in priority order.
+-- Replaces the old dual-walk approach (IsNameplateChain + GetCooldownCategory)
+-- which walked the hierarchy twice and caused redundant work.
+function MCE:ClassifyFrame(cooldownFrame)
     local current = cooldownFrame:GetParent()
-    if not current then
-        return "global"
-    end
+    if not current then return "global" end
 
     local maxDepth = (self.db and self.db.profile and self.db.profile.scanDepth) or 10
+    local extendedLimit = maxDepth + 30
 
-    if IsNameplateChain(current, maxDepth + 30) then
-        categoryCache[cooldownFrame] = "nameplate"
-        return "nameplate"
+    -- Phase 1: Build ancestry chain once (single allocation, reused for all checks)
+    local chain = {}
+    local chainLen = 0
+    local node = current
+    while node and node ~= UIParent and chainLen < extendedLimit do
+        chainLen = chainLen + 1
+        chain[chainLen] = node
+        node = node:GetParent()
     end
+    local reachedUIParent = (node == UIParent)
 
-    -- Fast early-out for aura buttons
+    -- Phase 2: Fast early-out for aura buttons (buff/debuff on player frame vs nameplate)
     local parentName = current:GetName() or ""
     if strfind(parentName, "BuffButton", 1, true)
     or strfind(parentName, "DebuffButton", 1, true)
     or strfind(parentName, "TempEnchant", 1, true) then
-        local probe = current
-        local probeDepth = 0
-        while probe and probe ~= UIParent and probeDepth < maxDepth do
-            local probeName = probe:GetName() or ""
-            local probeType = probe:GetObjectType()
-            if IsNameplateContext(probeName, probeType, probe.unit) then
-                categoryCache[cooldownFrame] = "nameplate"
+        -- Walk the pre-built chain looking for nameplate ancestors
+        for i = 1, chainLen do
+            local n = chain[i]
+            local name = n:GetName() or ""
+            if IsNameplateContext(name, n:GetObjectType(), n.unit) then
                 return "nameplate"
             end
-            probe = probe:GetParent()
-            probeDepth = probeDepth + 1
         end
-
-        -- If the probe walked all the way to UIParent, the aura is definitively
-        -- a player buff/debuff (not on a nameplate). Cache and return immediately.
-        if probe == UIParent then
-            categoryCache[cooldownFrame] = "global"
-            return "global"
-        end
-
-        -- Chain is truncated (didn't reach UIParent) — hierarchy may still be
-        -- attaching to a nameplate. Defer classification.
+        -- Reached UIParent → definitively a player buff/debuff
+        if reachedUIParent then return "global" end
+        -- Chain still building (hierarchy incomplete) → defer
         return "aura_pending"
     end
 
-    local result = "global"
-    local depth  = 0
+    -- Phase 3: General classification within configured scan depth
+    local limit = chainLen < maxDepth and chainLen or maxDepth
+    for i = 1, limit do
+        local frame = chain[i]
+        local name = frame:GetName() or ""
+        local objType = frame:GetObjectType()
 
-    while current and current ~= UIParent and depth < maxDepth do
-        local name    = current:GetName() or ""
-        local objType = current:GetObjectType()
-
-        -- Blacklist check (exact pair + contains patterns)
-        if IsBlacklistedFrame(current, name) then
-            categoryCache[cooldownFrame] = "blacklist"
-            return "blacklist"
-        end
+        -- Blacklist check (exact pair + name-contains patterns)
+        if IsBlacklistedFrame(frame, name) then return "blacklist" end
 
         -- Nameplate detection
-        if IsNameplateContext(name, objType, current.unit) then
-            result = "nameplate"
-            break
-        end
+        if IsNameplateContext(name, objType, frame.unit) then return "nameplate" end
 
         -- Unit frame detection
         if strfind(name, "PlayerFrame", 1, true)
@@ -325,31 +348,47 @@ function MCE:GetCooldownCategory(cooldownFrame)
         or strfind(name, "FocusFrame", 1, true)
         or strfind(name, "ElvUF", 1, true)
         or strfind(name, "SUF", 1, true) then
-            result = "unitframe"
-            break
+            return "unitframe"
         end
 
-        -- Action bar detection
-        if (current.action and type(current.action) == "number")
-        or (current.GetAttribute and current:GetAttribute("type"))
+        -- Action bar detection (skip "Aura" false positives)
+        if (frame.action and type(frame.action) == "number")
+        or (frame.GetAttribute and frame:GetAttribute("type"))
         or strfind(name, "Action", 1, true)
         or strfind(name, "MultiBar", 1, true)
         or strfind(name, "BT4", 1, true)
         or strfind(name, "Dominos", 1, true) then
             if not strfind(name, "Aura", 1, true) then
-                result = "actionbar"
-                break
+                return "actionbar"
             end
         end
-
-        current = current:GetParent()
-        depth = depth + 1
     end
 
-    if result ~= "global" then
-        categoryCache[cooldownFrame] = result
+    -- Phase 4: Extended nameplate check beyond configured depth
+    -- Nameplates can be deeply nested in addon UIs (Plater, KuiNameplates, etc.)
+    for i = limit + 1, chainLen do
+        local frame = chain[i]
+        local name = frame:GetName() or ""
+        if IsNameplateContext(name, frame:GetObjectType(), frame.unit) then
+            return "nameplate"
+        end
     end
-    return result
+
+    return "global"
+end
+
+function MCE:GetCooldownCategory(cooldownFrame)
+    local cached = categoryCache[cooldownFrame]
+    if cached then return cached end
+
+    local category = self:ClassifyFrame(cooldownFrame)
+
+    -- Cache definitive results; "aura_pending" is retried in ApplyStyle
+    if category ~= "aura_pending" then
+        categoryCache[cooldownFrame] = category
+    end
+
+    return category
 end
 
 -- === STACK COUNT STYLING ===
@@ -378,12 +417,17 @@ function MCE:StyleStackCount(cooldownFrame, config, category)
 end
 
 -- === STYLE APPLICATION ===
-function MCE:ApplyCustomStyle(cdFrame, forcedCategory)
+-- Main entry point called from the batch processor (ProcessDirtyFrames).
+-- Uses change-detection on edge/countdown APIs to prevent visual flicker:
+-- SetDrawEdge, SetEdgeScale, SetHideCountdownNumbers are only called when
+-- their value actually differs from the last-applied value.
+function MCE:ApplyStyle(cdFrame, forcedCategory)
     if IsForbiddenFrame(cdFrame) then return end
     if IsBlacklistedFrame(cdFrame) then return end
 
     trackedCooldowns[cdFrame] = true
 
+    -- Override cached category when a specific one is forced (e.g., "actionbar" from hooks)
     if forcedCategory and forcedCategory ~= "global" then
         if categoryCache[cdFrame] ~= forcedCategory then
             categoryCache[cdFrame] = forcedCategory
@@ -396,59 +440,65 @@ function MCE:ApplyCustomStyle(cdFrame, forcedCategory)
 
     local category = forcedCategory or self:GetCooldownCategory(cdFrame)
 
-    -- Loguer la frame avant le traitement des cas spéciaux
-    -- On loguera plus bas si le style est réellement appliqué, mais ici on capture la catégorie détectée
-
+    -- Handle deferred aura classification (single retry, then fallback to global)
     if category == "aura_pending" then
-        local retries = pendingAuraRetries[cdFrame] or 0
-        if retries < 4 then
-            pendingAuraRetries[cdFrame] = retries + 1
-            C_Timer_After(0.05, function()
-                if cdFrame and not IsForbiddenFrame(cdFrame) then
-                    MCE:ApplyCustomStyle(cdFrame)
+        categoryCache[cdFrame] = nil
+        C_Timer_After(0.1, function()
+            if cdFrame and not IsForbiddenFrame(cdFrame) then
+                local retryCategory = self:ClassifyFrame(cdFrame)
+                if retryCategory == "aura_pending" then
+                    retryCategory = "global"
                 end
-            end)
-            return
-        end
-        pendingAuraRetries[cdFrame] = nil
-        category = "global"
-    else
-        pendingAuraRetries[cdFrame] = nil
+                categoryCache[cdFrame] = retryCategory
+                self:ApplyStyle(cdFrame)
+            end
+        end)
+        return
     end
 
-    if category == "blacklist" then 
-        -- Optionnel : loguer les frames blacklistées
+    if category == "blacklist" then
         self:LogStyleApplication(cdFrame, "blacklist", false)
-        return 
+        return
     end
 
     local config = self.db.profile.categories[category]
     if not config or not config.enabled then
-        if cdFrame.SetDrawEdge then
-            pcall(cdFrame.SetDrawEdge, cdFrame, false)
+        -- Disabled category: clear edge only if we previously set it (anti-flicker)
+        if lastAppliedEdge[cdFrame] ~= false then
+            if cdFrame.SetDrawEdge then
+                pcall(cdFrame.SetDrawEdge, cdFrame, false)
+            end
+            lastAppliedEdge[cdFrame] = false
         end
-        -- Loguer que c'est désactivé
         self:LogStyleApplication(cdFrame, category .. " (Disabled)", false)
         return
     end
 
-    -- C'est ici que l'application réelle commence
     self:LogStyleApplication(cdFrame, category, true)
 
-    -- Edge glow (lightweight — always re-apply; CooldownFrame_Set may reset)
+    -- === Edge glow — only call API when value actually changed ===
     if cdFrame.SetDrawEdge then
-        pcall(cdFrame.SetDrawEdge, cdFrame, config.edgeEnabled)
+        if lastAppliedEdge[cdFrame] ~= config.edgeEnabled then
+            pcall(cdFrame.SetDrawEdge, cdFrame, config.edgeEnabled)
+            lastAppliedEdge[cdFrame] = config.edgeEnabled
+        end
         if config.edgeEnabled and cdFrame.SetEdgeScale then
-            pcall(cdFrame.SetEdgeScale, cdFrame, config.edgeScale)
+            if lastAppliedEdgeScale[cdFrame] ~= config.edgeScale then
+                pcall(cdFrame.SetEdgeScale, cdFrame, config.edgeScale)
+                lastAppliedEdgeScale[cdFrame] = config.edgeScale
+            end
         end
     end
 
-    -- Hide/show countdown numbers
+    -- === Hide/show countdown numbers — only call API when value changed ===
     if cdFrame.SetHideCountdownNumbers then
-        pcall(cdFrame.SetHideCountdownNumbers, cdFrame, config.hideCountdownNumbers)
+        if lastAppliedHideNums[cdFrame] ~= config.hideCountdownNumbers then
+            pcall(cdFrame.SetHideCountdownNumbers, cdFrame, config.hideCountdownNumbers)
+            lastAppliedHideNums[cdFrame] = config.hideCountdownNumbers
+        end
     end
 
-    -- Skip full re-style if category unchanged (prevents cooldown text flashing)
+    -- Skip full font re-style if category hasn't changed (prevents text flashing)
     if styledCategory[cdFrame] == category then
         return
     end
@@ -482,13 +532,19 @@ function MCE:ApplyCustomStyle(cdFrame, forcedCategory)
     end
 end
 
+-- Backward-compatible alias
+MCE.ApplyCustomStyle = MCE.ApplyStyle
+
 -- === FORCE UPDATE ===
 function MCE:ForceUpdateAll(fullScan)
     self:DebugPrint("ForceUpdateAll called (fullScan=" .. tostring(fullScan) .. ").")
 
-    -- Clear style caches so everything gets a fresh pass
+    -- Clear all caches so everything gets a fresh pass
     wipe(categoryCache)
     wipe(styledCategory)
+    wipe(lastAppliedEdge)
+    wipe(lastAppliedEdgeScale)
+    wipe(lastAppliedHideNums)
 
     if fullScan or not self.fullScanDone then
         self.fullScanDone = true
@@ -496,10 +552,10 @@ function MCE:ForceUpdateAll(fullScan)
         while frame do
             if not IsForbiddenFrame(frame) then
                 if frame:IsObjectType("Cooldown") then
-                    self:ApplyCustomStyle(frame)
+                    QueueStyleUpdate(frame)
                 elseif frame.cooldown and type(frame.cooldown) == "table" then
                     if not IsForbiddenFrame(frame.cooldown) then
-                        self:ApplyCustomStyle(frame.cooldown)
+                        QueueStyleUpdate(frame.cooldown)
                     end
                 end
             end
@@ -511,7 +567,7 @@ function MCE:ForceUpdateAll(fullScan)
     -- Incremental: only update previously tracked cooldowns
     for cd in pairs(trackedCooldowns) do
         if cd and cd.IsObjectType and cd:IsObjectType("Cooldown") then
-            self:ApplyCustomStyle(cd)
+            QueueStyleUpdate(cd)
         end
     end
 end
@@ -520,8 +576,12 @@ end
 function MCE:NAME_PLATE_UNIT_ADDED(_, unit)
     local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit(unit)
     if plate then
-        C_Timer_After(0, function() self:StyleCooldownsInFrame(plate, "nameplate", 10) end)
-        C_Timer_After(0.12, function() self:StyleCooldownsInFrame(plate, "nameplate", 10) end)
+        -- Single deferred call (batch processor coalesces any rapid follow-ups)
+        C_Timer_After(0.05, function()
+            if plate and not IsForbiddenFrame(plate) then
+                self:StyleCooldownsInFrame(plate, "nameplate", 10)
+            end
+        end)
     end
 end
 
@@ -541,8 +601,9 @@ end
 
 function MCE:PLAYER_REGEN_DISABLED()
     if self.nameplateTicker then return end
-    
-    self.nameplateTicker = C_Timer.NewTicker(0.35, function()
+
+    -- Slightly longer interval to reduce combat CPU overhead
+    self.nameplateTicker = C_Timer.NewTicker(0.5, function()
         self:RefreshVisibleNameplates()
     end)
 end
@@ -555,41 +616,34 @@ function MCE:PLAYER_REGEN_ENABLED()
 end
 
 -- === HOOKS ===
+-- All hooks now queue frames into the batch processor instead of
+-- applying styles directly. This eliminates flickering caused by
+-- rapid sequential hook fires (e.g., GCD triggers CooldownFrame_Set
+-- multiple times per frame).
 function MCE:SetupHooks()
     if hooksInstalled then return end
     hooksInstalled = true
 
+    -- Primary hook: fires on every cooldown start/reset
     hooksecurefunc("CooldownFrame_Set", function(f)
-        if categoryCache[f] then
-            MCE:ApplyCustomStyle(f)
-        else
-            C_Timer_After(0, function()
-                if f and not IsForbiddenFrame(f) then
-                    MCE:ApplyCustomStyle(f)
-                end
-            end)
-        end
+        if not f or IsForbiddenFrame(f) then return end
+        QueueStyleUpdate(f)
     end)
 
+    -- Legacy hook (older API, may not exist in modern clients)
     if CooldownFrame_SetTimer then
         hooksecurefunc("CooldownFrame_SetTimer", function(f)
-            if categoryCache[f] then
-                MCE:ApplyCustomStyle(f)
-            else
-                C_Timer_After(0, function()
-                    if f and not IsForbiddenFrame(f) then
-                        MCE:ApplyCustomStyle(f)
-                    end
-                end)
-            end
+            if not f or IsForbiddenFrame(f) then return end
+            QueueStyleUpdate(f)
         end)
     end
 
+    -- Action button specific hook (provides forced "actionbar" category)
     if ActionButton_UpdateCooldown then
         hooksecurefunc("ActionButton_UpdateCooldown", function(button)
             local cd = button and (button.cooldown or button.Cooldown)
             if cd then
-                MCE:ApplyCustomStyle(cd, "actionbar")
+                QueueStyleUpdate(cd, "actionbar")
             end
         end)
     end
@@ -599,13 +653,15 @@ function MCE:SetupHooks()
     if LAB then
         LAB:RegisterCallback("OnButtonUpdate", function(_, button)
             if button and button.cooldown then
-                MCE:ApplyCustomStyle(button.cooldown, "actionbar")
+                QueueStyleUpdate(button.cooldown, "actionbar")
             end
         end)
     end
 end
 
 -- === SCOPED SCANNING ===
+-- Recursively scans a frame tree and queues all Cooldown frames found
+-- for batch style processing. Used primarily for nameplate scanning.
 function MCE:StyleCooldownsInFrame(rootFrame, forcedCategory, maxDepth)
     if not rootFrame then return end
     maxDepth = maxDepth or 5
@@ -615,10 +671,10 @@ function MCE:StyleCooldownsInFrame(rootFrame, forcedCategory, maxDepth)
         if IsForbiddenFrame(frame) then return end
 
         if frame.IsObjectType and frame:IsObjectType("Cooldown") then
-            self:ApplyCustomStyle(frame, forcedCategory)
+            QueueStyleUpdate(frame, forcedCategory)
         elseif frame.cooldown and type(frame.cooldown) == "table" then
             if not IsForbiddenFrame(frame.cooldown) then
-                self:ApplyCustomStyle(frame.cooldown, forcedCategory)
+                QueueStyleUpdate(frame.cooldown, forcedCategory)
             end
         end
 

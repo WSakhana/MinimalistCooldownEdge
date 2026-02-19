@@ -127,15 +127,26 @@ end
 -- OPTIONS BUILDER
 -- =========================================================================
 
-local function CreateCategoryOptions(order, name, key)
+local function CreateCategoryOptions(order, name, key, desc)
     local disabledFn    = function() return IsCatDisabled(key) end
     local stackHiddenFn = function() return IsStackHidden(key) end
 
     return {
         type = "group",
-        name = name,
+        -- Dynamic name with status indicator (green dot = active, gray = inactive)
+        name = function()
+            if not MCE.db or not MCE.db.profile then return name end
+            local enabled = MCE.db.profile.categories[key].enabled
+            return (enabled and "|cff00ff00" .. L["ON"] .. "|r  " or "|cff666666" .. L["OFF"] .. "|r  ") .. name
+        end,
         order = order,
         args = {
+            -- ── 0. Category description ──────────────────────────────────
+            catDesc = desc and {
+                type = "description", order = 0, fontSize = "medium",
+                name = "|cffaaaaaa" .. desc .. "|r\n",
+            } or nil,
+
             -- ── 1. Main Toggle ──────────────────────────────────────────
             enableGroup = {
                 type = "group", name = L["State"], inline = true, order = 1,
@@ -337,6 +348,30 @@ function MCE:GetOptions()
                         image = "Interface\\AddOns\\MinimalistCooldownEdge\\MinimalistCooldownEdge",
                         imageWidth = 32, imageHeight = 32,
                     },
+                    -- ── Category Status Overview ────────────────────────
+                    statusGroup = {
+                        type = "group", name = L["Category Status"],
+                        inline = true, order = 1.5,
+                        args = {
+                            statusText = {
+                                type = "description", order = 1, fontSize = "medium",
+                                name = function()
+                                    if not MCE.db or not MCE.db.profile then return "" end
+                                    local cats = MCE.db.profile.categories
+                                    local function s(enabled)
+                                        return enabled and "|cff00ff00" .. L["ON"] .. "|r" or "|cff999999" .. L["OFF"] .. "|r"
+                                    end
+                                    return format(
+                                        "%s: %s    |    %s: %s    |    %s: %s    |    %s: %s",
+                                        L["Action Bars"], s(cats.actionbar.enabled),
+                                        L["Nameplates"], s(cats.nameplate.enabled),
+                                        L["Unit Frames"], s(cats.unitframe.enabled),
+                                        L["CD Manager & Others"], s(cats.global.enabled)
+                                    )
+                                end,
+                            },
+                        },
+                    },
                     perfGroup = {
                         type = "group", name = L["Performance & Detection"],
                         inline = true, order = 2,
@@ -355,6 +390,31 @@ function MCE:GetOptions()
                             helpText = {
                                 type = "description", order = 2, width = "full",
                                 name = L["SCAN_DEPTH_HELP"],
+                            },
+                        },
+                    },
+                    -- ── Tools ────────────────────────────────────────────
+                    toolsGroup = {
+                        type = "group", name = L["Tools"],
+                        inline = true, order = 2.5,
+                        args = {
+                            forceRefresh = {
+                                type = "execute", order = 1, width = 1.2,
+                                name = L["Force Refresh"],
+                                desc = L["Force a full rescan of all cooldown frames."],
+                                func = function()
+                                    MCE:ForceUpdateAll(true)
+                                    print("|cff00ccffMCE:|r " .. L["Full refresh completed."])
+                                end,
+                            },
+                            clearDebugLog = {
+                                type = "execute", order = 2, width = 1.2,
+                                name = L["Clear Debug Log"],
+                                desc = L["Clears the saved debug log data."],
+                                func = function()
+                                    wipe(MinimalistCooldownEdge_DebugLog or {})
+                                    print("|cff00ccffMCE:|r " .. L["Debug log cleared."])
+                                end,
                             },
                         },
                     },
@@ -378,11 +438,15 @@ function MCE:GetOptions()
                 },
             },
 
-            -- ── Category tabs ───────────────────────────────────────────
-            actionbar = CreateCategoryOptions(2, L["Action Bars"],          "actionbar"),
-            nameplate = CreateCategoryOptions(3, L["Nameplates"],           "nameplate"),
-            unitframe = CreateCategoryOptions(4, L["Unit Frames"],          "unitframe"),
-            global    = CreateCategoryOptions(5, L["CD Manager & Others"],  "global"),
+            -- ── Category tabs (with per-category descriptions) ────────
+            actionbar = CreateCategoryOptions(2, L["Action Bars"],          "actionbar",
+                L["ACTIONBAR_DESC"]),
+            nameplate = CreateCategoryOptions(3, L["Nameplates"],           "nameplate",
+                L["NAMEPLATE_DESC"]),
+            unitframe = CreateCategoryOptions(4, L["Unit Frames"],          "unitframe",
+                L["UNITFRAME_DESC"]),
+            global    = CreateCategoryOptions(5, L["CD Manager & Others"],  "global",
+                L["GLOBAL_DESC"]),
 
             -- ── Profiles (always last) ──────────────────────────────────
             profiles = profileOpts,
