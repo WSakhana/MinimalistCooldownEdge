@@ -138,6 +138,32 @@ IsBlacklistedFrame = function(frame, knownFrameName)
     return false
 end
 
+-- === CHARGE COOLDOWN OVERLAP PREVENTION ===
+-- For charge-based abilities (e.g., Fire Blast, Shield of the Righteous),
+-- WoW uses two separate cooldown frames on the same action button:
+--   • button.cooldown       – the main/full cooldown (all charges spent)
+--   • button.chargeCooldown – the per-charge recharge timer
+-- When charges remain, only the chargeCooldown should show countdown text.
+-- Without this guard, the addon's styling forces both frames to display
+-- numbers simultaneously, causing the "overlapping timers" visual glitch.
+local function IsMainCooldownWithActiveChargeCooldown(cdFrame)
+    local parent = cdFrame:GetParent()
+    if not parent then return false end
+
+    -- Verify this frame is the *main* cooldown, not the charge cooldown
+    local mainCD = parent.cooldown or parent.Cooldown
+    if mainCD ~= cdFrame then return false end
+
+    -- Check for a sibling charge cooldown that is currently visible
+    local chargeCD = parent.chargeCooldown or parent.ChargeCooldown
+    if chargeCD and chargeCD ~= cdFrame and not IsForbiddenFrame(chargeCD)
+       and chargeCD.IsShown and chargeCD:IsShown() then
+        return true
+    end
+
+    return false
+end
+
 local function IsNameplateContext(name, objType, unit)
     return objType == "NamePlate"
         or strfind(name, "NamePlate", 1, true)
@@ -492,9 +518,19 @@ function MCE:ApplyStyle(cdFrame, forcedCategory)
 
     -- === Hide/show countdown numbers — only call API when value changed ===
     if cdFrame.SetHideCountdownNumbers then
-        if lastAppliedHideNums[cdFrame] ~= config.hideCountdownNumbers then
-            pcall(cdFrame.SetHideCountdownNumbers, cdFrame, config.hideCountdownNumbers)
-            lastAppliedHideNums[cdFrame] = config.hideCountdownNumbers
+        local hideNums = config.hideCountdownNumbers
+
+        -- Charge-based abilities: force-hide numbers on the main cooldown
+        -- when a charge cooldown is actively displaying its own timer,
+        -- preventing overlapping countdown text.
+        if category == "actionbar" and not hideNums
+           and IsMainCooldownWithActiveChargeCooldown(cdFrame) then
+            hideNums = true
+        end
+
+        if lastAppliedHideNums[cdFrame] ~= hideNums then
+            pcall(cdFrame.SetHideCountdownNumbers, cdFrame, hideNums)
+            lastAppliedHideNums[cdFrame] = hideNums
         end
     end
 

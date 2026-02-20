@@ -1,5 +1,9 @@
 # Changelog
 
+## [2.9.2] - 2026-02-20
+### Fixed
+- **Charge Cooldown Overlap:** Fixed a visual glitch where cooldown timers for charge-based abilities (e.g., Fire Blast, Shield of the Righteous) would overlap and display simultaneously on action bars when using addons like Bartender4. The addon now correctly hides countdown numbers on the main cooldown when a charge cooldown is actively displaying its own timer.
+
 ## [2.9.1] - 2026-02-19
 ### Changed
 - Consolidate scan depth constant and remove redundant options from settings
