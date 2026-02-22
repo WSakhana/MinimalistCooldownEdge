@@ -2,16 +2,19 @@
 
 local addonName, addon = ...
 local MCE = LibStub("AceAddon-3.0"):NewAddon(addon, "MinimalistCooldownEdge",
-    "AceConsole-3.0")
+    "AceConsole-3.0", "AceEvent-3.0")
 local L = LibStub("AceLocale-3.0"):GetLocale("MinimalistCooldownEdge")
 
+-- === UPVALUE LOCALS (Performance) ===
 local pcall = pcall
+local InCombatLockdown = InCombatLockdown
 
 -- =========================================================================
 -- SHARED UTILITIES  (used across all modules)
 -- =========================================================================
 
 --- Safe forbidden-frame check (pcall guards tainted frames).
+--- Must use pcall because indexing a tainted frame itself throws.
 function MCE:IsForbidden(frame)
     if not frame then return true end
     local ok, val = pcall(function() return frame:IsForbidden() end)
@@ -20,24 +23,59 @@ end
 
 --- WoW API expects "" not "NONE" for font outline flags.
 function MCE.NormalizeFontStyle(style)
-    return (not style or style == "NONE") and "" or style
+    if not style or style == "NONE" then return "" end
+    return style
 end
 
 --- Resolves "GAMEDEFAULT" to WoW's native font path.
-function MCE.ResolveFontPath(path)
-    return path == "GAMEDEFAULT" and GameFontNormal:GetFont() or path
+function MCE.ResolveFontPath(fontPath)
+    if fontPath == "GAMEDEFAULT" then
+        return GameFontNormal:GetFont()
+    end
+    return fontPath
 end
 
 -- =========================================================================
--- DEBUG
+-- DEBUG / LOGGING SYSTEM
 -- =========================================================================
 
+-- Initialisation de la table globale si elle n'existe pas
 MinimalistCooldownEdge_DebugLog = MinimalistCooldownEdge_DebugLog or {}
 
-function MCE:DebugPrint(msg)
-    if self.db and self.db.profile and self.db.profile.debugMode then
-        self:Print("|cffffaa00[Debug]|r " .. tostring(msg))
-    end
+-- Cache de session pour éviter de spammer le fichier d'écriture à chaque frame (performance)
+local sessionLogCache = {}
+
+function MCE:DebugPrint(message)
+    if not (self.db and self.db.profile and self.db.profile.debugMode) then return end
+    self:Print("|cffffaa00[Debug]|r " .. tostring(message))
+end
+
+function MCE:LogStyleApplication(frame, category, success)
+    if not frame then return end
+    if not (self.db and self.db.profile and self.db.profile.debugMode) then return end
+    if self:GetModule("Classifier"):IsBlacklisted(frame) then return end
+
+    -- On crée un identifiant unique pour la frame
+    local frameName = frame:GetName() or "AnonymousFrame"
+    local parent = frame:GetParent()
+    local parentName = parent and parent:GetName() or "NoParent"
+
+    -- Clé unique : Parent -> Frame
+    local key = parentName .. " -> " .. frameName
+
+    -- Si on a déjà logué cette frame dans cette session, on ignore (pour ne pas tuer les FPS)
+    if sessionLogCache[key] then return end
+    sessionLogCache[key] = true
+
+    -- Enregistrement dans la variable sauvegardée
+    MinimalistCooldownEdge_DebugLog[key] = {
+        frameName = frameName,
+        parentName = parentName,
+        category = category,
+        objType = frame:GetObjectType(),
+        timestamp = date("%Y-%m-%d %H:%M:%S"),
+        success = success,
+    }
 end
 
 -- =========================================================================
@@ -84,6 +122,28 @@ function MCE:OnInitialize()
     self:RegisterChatCommand("mce", "SlashCommand")
     self:RegisterChatCommand("minice", "SlashCommand")
     self:RegisterChatCommand("minimalistcooldownedge", "SlashCommand")
+
+    self:DebugPrint("Addon initialized.")
+end
+
+function MCE:OnEnable()
+    self:RegisterEvent("PLAYER_ENTERING_WORLD")
+    self:DebugPrint("Addon enabled.")
+end
+
+function MCE:OnDisable()
+    self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+    self:DebugPrint("Addon disabled.")
+end
+
+function MCE:PLAYER_ENTERING_WORLD(_, isInitialLogin, isReloadingUi)
+    if isInitialLogin then
+        self:DebugPrint("PLAYER_ENTERING_WORLD (initial login).")
+    elseif isReloadingUi then
+        self:DebugPrint("PLAYER_ENTERING_WORLD (UI reload).")
+    else
+        self:DebugPrint("PLAYER_ENTERING_WORLD (zone/world transition).")
+    end
 end
 
 function MCE:SlashCommand(input)
@@ -92,7 +152,12 @@ function MCE:SlashCommand(input)
     if cmd and cmd:lower() == "debug" then
         if not (self.db and self.db.profile) then return end
         self.db.profile.debugMode = not self.db.profile.debugMode
-        self:Print(self.db.profile.debugMode and "Debug mode enabled." or "Debug mode disabled.")
+        if self.db.profile.debugMode then
+            self:Print("Debug mode enabled.")
+            self:DebugPrint("Debug logging active.")
+        else
+            self:Print("Debug mode disabled.")
+        end
         return
     end
 

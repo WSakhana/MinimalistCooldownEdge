@@ -10,7 +10,7 @@ local strfind, ipairs, type = string.find, ipairs, type
 local setmetatable, wipe = setmetatable, wipe
 local UIParent = UIParent
 
-local SCAN_DEPTH = 10
+local SCAN_DEPTH = 10  -- Ancestry levels scanned for frame classification (covers all known addon UIs)
 
 -- Weak-keyed cache: auto-collected when frames are garbage-collected
 local categoryCache = setmetatable({}, { __mode = "k" })
@@ -19,21 +19,36 @@ local categoryCache = setmetatable({}, { __mode = "k" })
 -- BLACKLIST DATA
 -- =========================================================================
 
-local BLACKLIST_NAMES = {
-    "Glider", "Party", "Compact", "Raid", "VuhDo", "Grid",
-    "LossOfControlFrame", "ContainerFrameCombinedBagsCooldown",
+-- Add your ignore cases here.
+local BLACKLIST_NAME_CONTAINS = {
+    "Glider", "Party", "Compact",
+    "Raid", "VuhDo", "Grid",
+    "LossOfControlFrame",
+    "ContainerFrameCombinedBagsCooldown",
 }
 
--- Character equipment slots – generated to avoid 18 manual entries
-local BLACKLIST_PAIRS = {}
-for _, slot in ipairs({
-    "Back", "Shirt", "MainHand", "Legs", "Finger0", "Head", "Feet",
-    "Shoulder", "Wrist", "Hands", "Tabard", "SecondaryHand",
-    "Finger1", "Waist", "Chest", "Neck", "Trinket1", "Trinket0",
-}) do
-    local base = "Character" .. slot .. "Slot"
-    BLACKLIST_PAIRS[base .. " -> " .. base .. "Cooldown"] = true
-end
+-- Exact relation keys: "ParentName -> FrameName"
+local BLACKLIST_EXACT_PAIRS = {
+    -- Character Slots
+    ["CharacterBackSlot -> CharacterBackSlotCooldown"] = true,
+    ["CharacterShirtSlot -> CharacterShirtSlotCooldown"] = true,
+    ["CharacterMainHandSlot -> CharacterMainHandSlotCooldown"] = true,
+    ["CharacterLegsSlot -> CharacterLegsSlotCooldown"] = true,
+    ["CharacterFinger0Slot -> CharacterFinger0SlotCooldown"] = true,
+    ["CharacterHeadSlot -> CharacterHeadSlotCooldown"] = true,
+    ["CharacterFeetSlot -> CharacterFeetSlotCooldown"] = true,
+    ["CharacterShoulderSlot -> CharacterShoulderSlotCooldown"] = true,
+    ["CharacterWristSlot -> CharacterWristSlotCooldown"] = true,
+    ["CharacterHandsSlot -> CharacterHandsSlotCooldown"] = true,
+    ["CharacterTabardSlot -> CharacterTabardSlotCooldown"] = true,
+    ["CharacterSecondaryHandSlot -> CharacterSecondaryHandSlotCooldown"] = true,
+    ["CharacterFinger1Slot -> CharacterFinger1SlotCooldown"] = true,
+    ["CharacterWaistSlot -> CharacterWaistSlotCooldown"] = true,
+    ["CharacterChestSlot -> CharacterChestSlotCooldown"] = true,
+    ["CharacterNeckSlot -> CharacterNeckSlotCooldown"] = true,
+    ["CharacterTrinket1Slot -> CharacterTrinket1SlotCooldown"] = true,
+    ["CharacterTrinket0Slot -> CharacterTrinket0SlotCooldown"] = true,
+}
 
 -- =========================================================================
 -- PATTERN HELPERS
@@ -47,14 +62,14 @@ local function IsNameplateContext(name, objType, unit)
         or (unit and strfind(unit, "nameplate", 1, true))
 end
 
---- Détection rapide des frames générées par MiniCC (incluant le mode Test)
---- MiniCC injects DesiredIconSize/FontScale on anonymous nameplate cooldowns.
+-- NOUVELLE FONCTION : Détection ultra-rapide des frames générées par MiniCC
+-- MiniCC injects DesiredIconSize/FontScale on anonymous nameplate cooldowns.
 local function IsMiniCCFrame(frame)
     if not frame then return false end
-    
-    -- 1. Duck-typing : Empreinte digitale unique de MiniCC
+
+    -- 1. Duck-typing : MiniCC injecte ces variables spécifiques sur le Cooldown
     if frame.DesiredIconSize and frame.FontScale then
-        -- 2. Vérification de la hiérarchie interne de MiniCC (Layer -> Slot -> Container)
+        -- 2. Vérification de la hiérarchie (Layer -> Slot -> Container)
         -- Les frames de MiniCC sont anonymes, GetName() doit retourner nil
         local layer = frame:GetParent()
         if layer and not layer:GetName() then
@@ -62,7 +77,14 @@ local function IsMiniCCFrame(frame)
             if slot and not slot:GetName() then
                 local container = slot:GetParent()
                 if container and not container:GetName() then
-                    return true
+                    local nameplate = container:GetParent()
+                    -- 3. Le parent final doit être une Nameplate reconnue
+                    if nameplate then
+                        local npName = nameplate:GetName() or ""
+                        if IsNameplateContext(npName, nameplate:GetObjectType(), nameplate.unit) then
+                            return true
+                        end
+                    end
                 end
             end
         end
@@ -74,18 +96,20 @@ end
 -- PUBLIC API
 -- =========================================================================
 
-function Classifier:IsBlacklisted(frame, knownName)
+function Classifier:IsBlacklisted(frame, knownFrameName)
     if not frame then return false end
+
+    -- On ignore immédiatement les frames de MiniCC
     if IsMiniCCFrame(frame) then return true end
 
-    local name   = knownName or (frame.GetName and frame:GetName()) or "AnonymousFrame"
-    local parent = frame.GetParent and frame:GetParent()
-    local pName  = parent and parent.GetName and parent:GetName() or "NoParent"
+    local frameName = knownFrameName or (frame.GetName and frame:GetName()) or "AnonymousFrame"
+    local parent    = frame.GetParent and frame:GetParent() or nil
+    local parentName = parent and parent.GetName and parent:GetName() or "NoParent"
 
-    if BLACKLIST_PAIRS[pName .. " -> " .. name] then return true end
+    if BLACKLIST_EXACT_PAIRS[parentName .. " -> " .. frameName] then return true end
 
-    for _, key in ipairs(BLACKLIST_NAMES) do
-        if strfind(name, key, 1, true) or strfind(pName, key, 1, true) then
+    for _, key in ipairs(BLACKLIST_NAME_CONTAINS) do
+        if strfind(frameName, key, 1, true) or strfind(parentName, key, 1, true) then
             return true
         end
     end
@@ -94,44 +118,57 @@ end
 
 --- Single-pass frame classifier. Builds the ancestry chain once, then
 --- classifies by priority: blacklist > nameplate > unitframe > actionbar > global.
-function Classifier:ClassifyFrame(cdFrame)
-    local current = cdFrame:GetParent()
+function Classifier:ClassifyFrame(cooldownFrame)
+    local current = cooldownFrame:GetParent()
     if not current then return "global" end
 
-    -- Build ancestry chain once
-    local chain, chainLen = {}, 0
+    local maxDepth     = SCAN_DEPTH
+    local extendedLimit = SCAN_DEPTH + 30
+
+    -- Phase 1: Build ancestry chain once (single allocation, reused for all checks)
+    local chain = {}
+    local chainLen = 0
     local node = current
-    while node and node ~= UIParent and chainLen < SCAN_DEPTH + 30 do
+    while node and node ~= UIParent and chainLen < extendedLimit do
         chainLen = chainLen + 1
         chain[chainLen] = node
         node = node:GetParent()
     end
-    local reachedUI = (node == UIParent)
+    local reachedUIParent = (node == UIParent)
 
-    -- Fast early-out: aura buttons (buff/debuff on player frame vs nameplate)
-    local pName = current:GetName() or ""
-    if strfind(pName, "BuffButton",  1, true)
-    or strfind(pName, "DebuffButton", 1, true)
-    or strfind(pName, "TempEnchant",  1, true) then
+    -- Phase 2: Fast early-out for aura buttons (buff/debuff on player frame vs nameplate)
+    local parentName = current:GetName() or ""
+    if strfind(parentName, "BuffButton",  1, true)
+    or strfind(parentName, "DebuffButton", 1, true)
+    or strfind(parentName, "TempEnchant",  1, true) then
+        -- Walk the pre-built chain looking for nameplate ancestors
         for i = 1, chainLen do
             local n = chain[i]
-            if IsNameplateContext(n:GetName() or "", n:GetObjectType(), n.unit) then
+            local name = n:GetName() or ""
+            if IsNameplateContext(name, n:GetObjectType(), n.unit) then
                 return "nameplate"
             end
         end
-        return reachedUI and "global" or "aura_pending"
+        -- Reached UIParent → definitively a player buff/debuff
+        if reachedUIParent then return "global" end
+        -- Chain still building (hierarchy incomplete) → defer
+        return "aura_pending"
     end
 
-    -- General classification within configured depth
-    local limit = chainLen < SCAN_DEPTH and chainLen or SCAN_DEPTH
+    -- Phase 3: General classification within configured scan depth
+    local limit = chainLen < maxDepth and chainLen or maxDepth
     for i = 1, limit do
-        local f    = chain[i]
-        local name = f:GetName() or ""
-        local ot   = f:GetObjectType()
+        local frame = chain[i]
+        local name  = frame:GetName() or ""
+        local objType = frame:GetObjectType()
 
-        if self:IsBlacklisted(f, name) then return "blacklist" end
-        if IsNameplateContext(name, ot, f.unit) then return "nameplate" end
+        -- Blacklist check (exact pair + name-contains patterns)
+        if self:IsBlacklisted(frame, name) then return "blacklist" end
 
+        -- Nameplate detection
+        if IsNameplateContext(name, objType, frame.unit) then return "nameplate" end
+
+        -- Unit frame detection
         if strfind(name, "PlayerFrame", 1, true)
         or strfind(name, "TargetFrame", 1, true)
         or strfind(name, "FocusFrame",  1, true)
@@ -140,21 +177,24 @@ function Classifier:ClassifyFrame(cdFrame)
             return "unitframe"
         end
 
-        if ((f.action and type(f.action) == "number")
-         or (f.GetAttribute and f:GetAttribute("type"))
-         or strfind(name, "Action",  1, true)
-         or strfind(name, "MultiBar", 1, true)
-         or strfind(name, "BT4",     1, true)
-         or strfind(name, "Dominos", 1, true))
-        and not strfind(name, "Aura", 1, true) then
-            return "actionbar"
+        -- Action bar detection (skip "Aura" false positives)
+        if (frame.action and type(frame.action) == "number")
+        or (frame.GetAttribute and frame:GetAttribute("type"))
+        or strfind(name, "Action",   1, true)
+        or strfind(name, "MultiBar", 1, true)
+        or strfind(name, "BT4",      1, true)
+        or strfind(name, "Dominos",  1, true) then
+            if not strfind(name, "Aura", 1, true) then
+                return "actionbar"
+            end
         end
     end
 
-    -- Extended nameplate check (deeply-nested addon UIs: Plater, Kui, etc.)
+    -- Phase 4: Extended nameplate check beyond configured depth
+    -- Nameplates can be deeply nested in addon UIs (Plater, KuiNameplates, etc.)
     for i = limit + 1, chainLen do
-        local f = chain[i]
-        if IsNameplateContext(f:GetName() or "", f:GetObjectType(), f.unit) then
+        local frame = chain[i]
+        if IsNameplateContext(frame:GetName() or "", frame:GetObjectType(), frame.unit) then
             return "nameplate"
         end
     end
@@ -162,15 +202,17 @@ function Classifier:ClassifyFrame(cdFrame)
     return "global"
 end
 
-function Classifier:GetCategory(frame)
-    local cached = categoryCache[frame]
+function Classifier:GetCategory(cooldownFrame)
+    local cached = categoryCache[cooldownFrame]
     if cached then return cached end
 
-    local cat = self:ClassifyFrame(frame)
-    if cat ~= "aura_pending" then
-        categoryCache[frame] = cat
+    local category = self:ClassifyFrame(cooldownFrame)
+
+    -- Cache definitive results; "aura_pending" is retried in ApplyStyle
+    if category ~= "aura_pending" then
+        categoryCache[cooldownFrame] = category
     end
-    return cat
+    return category
 end
 
 function Classifier:IsCached(frame)
