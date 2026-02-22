@@ -47,18 +47,27 @@ local function IsNameplateContext(name, objType, unit)
         or (unit and strfind(unit, "nameplate", 1, true))
 end
 
+--- Détection rapide des frames générées par MiniCC (incluant le mode Test)
 --- MiniCC injects DesiredIconSize/FontScale on anonymous nameplate cooldowns.
 local function IsMiniCCFrame(frame)
-    if not (frame and frame.DesiredIconSize and frame.FontScale) then return false end
-    local layer = frame:GetParent()
-    if not layer or layer:GetName() then return false end
-    local slot = layer:GetParent()
-    if not slot or slot:GetName() then return false end
-    local container = slot:GetParent()
-    if not container or container:GetName() then return false end
-    local np = container:GetParent()
-    if not np then return false end
-    return IsNameplateContext(np:GetName() or "", np:GetObjectType(), np.unit)
+    if not frame then return false end
+    
+    -- 1. Duck-typing : Empreinte digitale unique de MiniCC
+    if frame.DesiredIconSize and frame.FontScale then
+        -- 2. Vérification de la hiérarchie interne de MiniCC (Layer -> Slot -> Container)
+        -- Les frames de MiniCC sont anonymes, GetName() doit retourner nil
+        local layer = frame:GetParent()
+        if layer and not layer:GetName() then
+            local slot = layer:GetParent()
+            if slot and not slot:GetName() then
+                local container = slot:GetParent()
+                if container and not container:GetName() then
+                    return true
+                end
+            end
+        end
+    end
+    return false
 end
 
 -- =========================================================================
