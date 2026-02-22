@@ -118,8 +118,49 @@ local function IsForbiddenFrame(frame)
     return not ok or forbidden
 end
 
+-- DÉPLACEMENT de IsNameplateContext ICI (nécessaire pour la détection MiniCC)
+local function IsNameplateContext(name, objType, unit)
+    return objType == "NamePlate"
+        or strfind(name, "NamePlate", 1, true)
+        or strfind(name, "Plater", 1, true)
+        or strfind(name, "Kui", 1, true)
+        or (unit and strfind(unit, "nameplate", 1, true))
+end
+
+-- NOUVELLE FONCTION : Détection ultra-rapide des frames générées par MiniCC
+local function IsMiniCCFrame(frame)
+    if not frame then return false end
+    
+    -- 1. Duck-typing : MiniCC injecte ces variables spécifiques sur le Cooldown
+    if frame.DesiredIconSize and frame.FontScale then
+        -- 2. Vérification de la hiérarchie (Layer -> Slot -> Container)
+        -- Les frames de MiniCC sont anonymes, GetName() doit retourner nil
+        local layer = frame:GetParent()
+        if layer and not layer:GetName() then
+            local slot = layer:GetParent()
+            if slot and not slot:GetName() then
+                local container = slot:GetParent()
+                if container and not container:GetName() then
+                    local nameplate = container:GetParent()
+                    -- 3. Le parent final doit être une Nameplate reconnue
+                    if nameplate then
+                        local npName = nameplate:GetName() or ""
+                        if IsNameplateContext(npName, nameplate:GetObjectType(), nameplate.unit) then
+                            return true
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
 IsBlacklistedFrame = function(frame, knownFrameName)
     if not frame then return false end
+
+    -- On ignore immédiatement les frames de MiniCC
+    if IsMiniCCFrame(frame) then return true end
 
     local frameName = knownFrameName or (frame.GetName and frame:GetName()) or "AnonymousFrame"
     local parent = frame.GetParent and frame:GetParent() or nil
@@ -163,15 +204,6 @@ local function IsMainCooldownWithActiveChargeCooldown(cdFrame)
 
     return false
 end
-
-local function IsNameplateContext(name, objType, unit)
-    return objType == "NamePlate"
-        or strfind(name, "NamePlate", 1, true)
-        or strfind(name, "Plater", 1, true)
-        or strfind(name, "Kui", 1, true)
-        or (unit and strfind(unit, "nameplate", 1, true))
-end
-
 -- === FONT STYLE NORMALIZER ===
 -- WoW API expects "" not "NONE"; centralise the conversion.
 local function NormalizeFontStyle(style)
