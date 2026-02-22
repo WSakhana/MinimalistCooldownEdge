@@ -1,5 +1,22 @@
 # Changelog
 
+
+## [3.0.1] - 2026-02-22
+
+### Added
+
+* Ultra-fast MiniCC frame detection (better compatibility).
+* New **Classifier** system (smarter frame detection & blacklist).
+* New **Styler** system (cleaner, faster cooldown styling).
+
+### Changed
+
+* Refactored core structure for better performance and maintainability.
+* Moved nameplate context handling.
+* Cleaned up options and removed unused defaults.
+* Updated TOC with new modules.
+
+
 ## [2.9.2] - 2026-02-20
 ### Fixed
 - **Charge Cooldown Overlap:** Fixed a visual glitch where cooldown timers for charge-based abilities (e.g., Fire Blast, Shield of the Righteous) would overlap and display simultaneously on action bars when using addons like Bartender4. The addon now correctly hides countdown numbers on the main cooldown when a charge cooldown is actively displaying its own timer.
