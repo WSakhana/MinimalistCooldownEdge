@@ -69,26 +69,26 @@ local function IsMiniCCFrame(frame)
 
     -- 1. Duck-typing : MiniCC injecte ces variables spécifiques sur le Cooldown
     if frame.DesiredIconSize and frame.FontScale then
-        -- 2. Vérification de la hiérarchie (Layer -> Slot -> Container)
-        -- Les frames de MiniCC sont anonymes, GetName() doit retourner nil
-        local layer = frame:GetParent()
-        if layer and not layer:GetName() then
-            local slot = layer:GetParent()
-            if slot and not slot:GetName() then
-                local container = slot:GetParent()
-                if container and not container:GetName() then
-                    local nameplate = container:GetParent()
-                    -- 3. Le parent final doit être une Nameplate reconnue
-                    if nameplate then
-                        local npName = nameplate:GetName() or ""
-                        if IsNameplateContext(npName, nameplate:GetObjectType(), nameplate.unit) then
-                            return true
-                        end
+        -- 2. Vérification de la hiérarchie (Cooldown -> Slot -> Container -> Nameplate)
+        -- Les frames intermédiaires de MiniCC sont anonymes, GetName() doit retourner nil
+        local slotFrame = frame:GetParent()
+        if slotFrame and not slotFrame:GetName() then
+            
+            local containerFrame = slotFrame:GetParent()
+            if containerFrame and not containerFrame:GetName() then
+                
+                local nameplate = containerFrame:GetParent()
+                -- 3. Le parent final doit être une Nameplate reconnue
+                if nameplate then
+                    local npName = nameplate:GetName() or ""
+                    if IsNameplateContext(npName, nameplate:GetObjectType(), nameplate.unit) then
+                        return true
                     end
                 end
             end
         end
     end
+    
     return false
 end
 
